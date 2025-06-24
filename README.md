@@ -103,12 +103,6 @@ Create a `mcp_config.json` file with your MCP server configuration. **Note: Rela
 }
 ```
 
-**Key Features:**
-- **✅ Relative Path Support**: Use `../mysql_mcp_server` instead of hardcoded absolute paths
-- **✅ Portable Configuration**: Works regardless of where your project is installed
-- **✅ Environment Variables**: Configure database connection details via env vars
-- **✅ UV Integration**: Uses `uv` for fast package management and execution
-
 The relative path `../mysql_mcp_server` is automatically resolved to the absolute path based on the config file's location, making your configuration portable across different systems.
 
 ## Examples and Tutorials
