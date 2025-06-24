@@ -3,7 +3,7 @@
     "command": "uv",
     "args": [
       "--directory",
-      "/home/zineng/workspace/agentic/agentdk/examples/mysql_mcp_server",
+      "../mysql_mcp_server",
       "run",
       "mysql_mcp_server"
     ],

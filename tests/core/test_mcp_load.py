@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 from agentdk.core.mcp_load import (
     get_mcp_config, _validate_mcp_config, _load_config_file,
-    _get_config_search_paths, transform_config_for_mcp_client
+    _get_config_search_paths, transform_config_for_mcp_client, _resolve_relative_paths
 )
 from agentdk.exceptions import MCPConfigError
 
@@ -99,3 +99,42 @@ def test_get_config_search_paths():
         
         # Should include current directory
         assert Path.cwd() / "mcp_config.json" in paths 
+
+
+def test_resolve_relative_paths() -> None:
+    """Test that relative paths in configuration are resolved relative to config directory."""
+    config = {
+        "mysql": {
+            "command": "uv",
+            "args": ["--directory", "../mysql_server", "run", "server"],
+            "env": {"HOST": "localhost"},
+            "transport": "stdio"
+        },
+        "postgres": {
+            "command": "/usr/bin/postgres",  # absolute path should not change
+            "args": ["--config", "config.conf"],  # non-path arg should not change
+            "env": {"PORT": "5432"}
+        }
+    }
+    
+    config_dir = Path("/home/user/project/configs")
+    resolved = _resolve_relative_paths(config, config_dir)
+    
+    # Relative path should be resolved
+    expected_mysql_path = str((config_dir / "../mysql_server").resolve())
+    assert resolved["mysql"]["args"][1] == expected_mysql_path
+    
+    # Other args should remain unchanged
+    assert resolved["mysql"]["args"][0] == "--directory"
+    assert resolved["mysql"]["args"][2] == "run"
+    assert resolved["mysql"]["args"][3] == "server"
+    
+    # Absolute command should remain unchanged
+    assert resolved["postgres"]["command"] == "/usr/bin/postgres"
+    
+    # Non-path args should remain unchanged
+    assert resolved["postgres"]["args"] == ["--config", "config.conf"]
+    
+    # Environment variables should remain unchanged
+    assert resolved["mysql"]["env"] == {"HOST": "localhost"}
+    assert resolved["postgres"]["env"] == {"PORT": "5432"} 

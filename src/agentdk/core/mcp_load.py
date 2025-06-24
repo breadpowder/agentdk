@@ -36,6 +36,8 @@ def get_mcp_config(agent_instance: Any) -> Dict[str, Any]:
             try:
                 config = _load_config_file(path)
                 _validate_mcp_config(config)
+                # Resolve relative paths in the config relative to config file location
+                config = _resolve_relative_paths(config, path.parent)
                 logger.info(f"Loaded MCP configuration from: {path}")
                 return config
             except (json.JSONDecodeError, MCPConfigError) as e:
@@ -192,6 +194,55 @@ def transform_config_for_mcp_client(config: Dict[str, Any]) -> Dict[str, Any]:
     # For now, return as-is since langchain-mcp-adapters expects this format
     # Future: Add any necessary transformations here
     return config
+
+
+def _resolve_relative_paths(config: Dict[str, Any], config_dir: Path) -> Dict[str, Any]:
+    """Resolve relative paths in configuration relative to config file directory.
+    
+    Args:
+        config: Configuration dictionary
+        config_dir: Directory containing the config file
+        
+    Returns:
+        Configuration with relative paths resolved
+    """
+    if not isinstance(config, dict):
+        return config
+    
+    result = {}
+    
+    for server_name, server_config in config.items():
+        if isinstance(server_config, dict):
+            resolved_server_config = server_config.copy()
+            
+            # Resolve relative paths in args
+            if "args" in resolved_server_config and isinstance(resolved_server_config["args"], list):
+                resolved_args = []
+                for arg in resolved_server_config["args"]:
+                    if isinstance(arg, str):
+                        # Check if this looks like a relative path (contains / or \ but doesn't start with /)
+                        if ("/" in arg or "\\" in arg) and not os.path.isabs(arg):
+                            # Resolve relative to config directory
+                            resolved_path = config_dir / arg
+                            resolved_args.append(str(resolved_path.resolve()))
+                        else:
+                            resolved_args.append(arg)
+                    else:
+                        resolved_args.append(arg)
+                resolved_server_config["args"] = resolved_args
+            
+            # Resolve relative paths in command if it looks like a path
+            if "command" in resolved_server_config:
+                command = resolved_server_config["command"]
+                if isinstance(command, str) and ("/" in command or "\\" in command) and not os.path.isabs(command):
+                    resolved_path = config_dir / command
+                    resolved_server_config["command"] = str(resolved_path.resolve())
+            
+            result[server_name] = resolved_server_config
+        else:
+            result[server_name] = server_config
+    
+    return result
 
 
 def substitute_environment_variables(config: Dict[str, Any]) -> Dict[str, Any]:

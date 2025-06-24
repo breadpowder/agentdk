@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "agentdk"
 version = "0.1.0"
 authors = [
-  { name="Zineng Yuan", email=zineng.yuan01@gmail.com" },
+  { name="Zineng Yuan", email="zineng.yuan01@gmail.com" },
 ]
 description = "Agent Development Kit for building intelligent agents with LangGraph and MCP integration, Support Agent Async in jupyter notebook/IPython"
 readme = "README.md"

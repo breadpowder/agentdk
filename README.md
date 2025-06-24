@@ -15,7 +15,6 @@ A powerful Python framework for building intelligent agents using LangGraph and 
 # Install from PyPI
 pip install agentdk[all] 
 
-
 ```
 
 ## 🏁 Quick Start
@@ -24,7 +23,7 @@ pip install agentdk[all]
 
 See [examples/](examples/) directory for complete implementation details.
 
-### Custom Agents
+### Define Custom Agents
 ```python
 from agentdk import SubAgentInterface
 
@@ -51,7 +50,7 @@ from agentdk.prompts import get_supervisor_prompt
 # Create specialized agents
 eda_agent = EDAAgent(
     llm=llm,
-    mcp_config_path="database_config.json",
+    mcp_config_path="mcp_config.json", ## see below for MCP conf set up
     name="data_analyst"
 )
 
@@ -75,32 +74,42 @@ to provide insights on our performance compared to competitors.
 """)
 ```
 
-## 🔧 MCP Integration
-
-### Setting Up MCP Servers
-
+### 🔧Set up MCP Servers
 MCP (Model Context Protocol) servers provide standardized tool access. Here's how to configure them:
 
-#### MySQL MCP Server
+#### MySQL MCP Server Example
+
+Create a `mcp_config.json` file with your MCP server configuration. **Note: Relative paths in configuration are resolved relative to the config file's location.**
 
 ```json
-// mcp_config.json
 {
-  "servers": {
-    "mysql": {
-      "command": "python",
-      "args": ["-m", "mysql_mcp_server"],
-      "env": {
-        "MYSQL_HOST": "localhost",
-        "MYSQL_PORT": "3306",
-        "MYSQL_USER": "your_user",
-        "MYSQL_PASSWORD": "your_password",
-        "MYSQL_DATABASE": "your_database"
-      }
-    }
+  "mysql": {
+    "command": "uv",
+    "args": [
+      "--directory",
+      "../mysql_mcp_server",
+      "run",
+      "mysql_mcp_server"
+    ],
+    "env": {
+      "MYSQL_HOST": "localhost",
+      "MYSQL_PORT": "3306",
+      "MYSQL_USER": "agentdk_user",
+      "MYSQL_PASSWORD": "agentdk_user_password",
+      "MYSQL_DATABASE": "agentdk_test"
+    },
+    "transport": "stdio"
   }
 }
 ```
+
+**Key Features:**
+- **✅ Relative Path Support**: Use `../mysql_mcp_server` instead of hardcoded absolute paths
+- **✅ Portable Configuration**: Works regardless of where your project is installed
+- **✅ Environment Variables**: Configure database connection details via env vars
+- **✅ UV Integration**: Uses `uv` for fast package management and execution
+
+The relative path `../mysql_mcp_server` is automatically resolved to the absolute path based on the config file's location, making your configuration portable across different systems.
 
 ## Examples and Tutorials
 Check out the [examples/](examples/) directory for:
@@ -112,7 +121,6 @@ Check out the [examples/](examples/) directory for:
 
 
 ## 🔧 Running Examples
-
 ### Environment Setup
 
 ```bash
@@ -137,14 +145,38 @@ MYSQL_DATABASE=your_database
 # Logging
 LOG_LEVEL=INFO
 ```
-Run agentdk_testing_notebook.ipynb
+
+### UV Environment Setup (Alternative)
+
+If you prefer using `uv` for faster package management:
+
+```bash
+# 1. Install Python 3.11 (if not already available)
+uv python install 3.11
+
+# 2. Create virtual environment with Python 3.11
+uv venv --python 3.11
+
+# 3. Activate environment and install project with all dependencies
+source .venv/bin/activate && uv pip install -e .[all]
+
+# 4. Install Jupyter and ipykernel
+uv pip install jupyter ipykernel
+
+# 5. Register the environment as a Jupyter kernel
+python -m ipykernel install --user --name agentdk --display-name "AgentDK (Python 3.11)"
+
+# 6. Verify kernel installation
+jupyter kernelspec list
+
+# 7. Launch Jupyter Lab
+jupyter lab
+```
+Then run [agentdk_testing_notebook.ipynb](examples/agentdk_testing_notebook.ipynb)
 
 ## License
-
 MIT License - see [LICENSE](LICENSE) file for details.
-
 ## Links
-
 - **Homepage**: [https://github.com/breadpowder/agentdk](https://github.com/breadpowder/agentdk)
 - **Documentation**: Coming soon
 - **Bug Reports**: [GitHub Issues](https://github.com/breadpowder/agentdk/issues)
