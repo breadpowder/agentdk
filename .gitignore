@@ -207,3 +207,14 @@ Thumbs.db
 *~
 *.media
 examples/mysql_mcp_server/
+
+# Development and internal files (keep local only)
+memory-bank/
+scripts/
+tests/
+PUBLICATION_STEPS.md
+PYPI_PUBLICATION_GUIDE.md
+SETUP.md
+design_doc.md
+setup_env.sh
+examples/RESPONSE_CONSISTENCY_FIX.md
