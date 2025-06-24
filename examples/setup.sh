@@ -93,6 +93,36 @@ fi
 
 # 5. Display connection information
 echo ""
+# 6. Setup environment configuration
+echo "⚙️ Setting up environment configuration..."
+if [ ! -f ".env" ]; then
+    if [ -f "env.sample" ]; then
+        cp env.sample .env
+        echo "✅ Created .env file from env.sample"
+        echo "   You can edit .env to customize your configuration"
+    else
+        echo "⚠️  Warning: env.sample not found, creating basic .env"
+        cat > .env << EOF
+# MySQL Database Configuration
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=agentdk_user
+MYSQL_PASSWORD=agentdk_user_password
+MYSQL_DATABASE=agentdk_test
+
+# LLM Configuration (add your API keys)
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+
+# Logging
+LOG_LEVEL=INFO
+EOF
+    fi
+else
+    echo "✅ .env file already exists"
+fi
+
+echo ""
 echo "🎉 Setup completed successfully!"
 echo "================================="
 echo "MySQL Connection Details:"
@@ -116,9 +146,8 @@ echo ""
 echo "🚀 You can now run the AgentDK examples!"
 echo ""
 echo "Environment Configuration:"
-echo "  The examples will use default MySQL connection settings."
-echo "  To customize, copy env.sample to .env and edit as needed:"
-echo "    cp env.sample .env"
+echo "  ✅ .env file has been created with database connection settings"
+echo "  📝 Edit .env to add your LLM API keys (OpenAI, Anthropic, etc.)"
 echo ""
 echo "Example usage:"
 echo "  python agent.py"
