@@ -276,11 +276,19 @@ class SubAgentInterface(AgentInterface):
             if not self.is_initialized:
                 await self._initialize()
 
+            # Parse memory context if present in the user prompt
+            actual_query, memory_context = self._parse_memory_context(user_prompt)
+
             # If we have a LangGraph agent, use it
             if self.agent:
                 # Combine system prompt with user prompt
                 system_prompt = self.config.get('system_prompt', self._get_default_prompt())
-                full_prompt = f"{system_prompt}\n\nUser Question: {user_prompt}"
+                
+                # Add memory context to system prompt if available
+                if memory_context:
+                    system_prompt += f"\n\nMEMORY CONTEXT:\n{memory_context}"
+                
+                full_prompt = f"{system_prompt}\n\nUser Question: {actual_query}"
                 
                 # Use LangGraph agent to process the query
                 result = await self.agent.ainvoke({"messages": [full_prompt]})
@@ -294,7 +302,7 @@ class SubAgentInterface(AgentInterface):
             else:
                 # Fallback for when no agent is available
                 agent_type = self.__class__.__name__.replace('Agent', '').upper()
-                return f"{agent_type} Analysis (without tools): {user_prompt}\n\nNote: No tools available. Please configure MCP servers for full functionality."
+                return f"{agent_type} Analysis (without tools): {actual_query}\n\nNote: No tools available. Please configure MCP servers for full functionality."
 
         except AgentInitializationError:
             # Re-raise initialization errors - these are critical and should not be silently handled
@@ -302,6 +310,40 @@ class SubAgentInterface(AgentInterface):
         except Exception as e:
             self.logger.error(f"Error processing query: {e}")
             return f"Error processing query: {e}"
+    
+    def _parse_memory_context(self, user_prompt: str) -> tuple[str, str]:
+        """Parse memory context from formatted user prompt.
+        
+        Args:
+            user_prompt: User prompt that may contain memory context
+            
+        Returns:
+            Tuple of (actual_query, memory_context)
+        """
+        # Check if the prompt contains memory context formatting
+        if "User query: " in user_prompt and "Memory context: " in user_prompt:
+            try:
+                # Split by the first occurrence of "Memory context:"
+                parts = user_prompt.split("Memory context: ", 1)
+                if len(parts) == 2:
+                    # Extract the user query from the first part
+                    first_part = parts[0].strip()
+                    if first_part.startswith("User query: "):
+                        actual_query = first_part.replace("User query: ", "").strip()
+                    else:
+                        actual_query = first_part.strip()
+                    
+                    # The memory context is everything after "Memory context: "
+                    memory_context = parts[1].strip()
+                    
+                    return actual_query, memory_context
+                    
+            except Exception as e:
+                self.logger.warning(f"Failed to parse memory context: {e}")
+                return user_prompt, ""
+        
+        # No memory context found, return original prompt
+        return user_prompt, ""
     
     async def _setup_mcp_client(self) -> None:
         """Set up MCP client from configuration path.

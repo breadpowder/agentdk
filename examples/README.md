@@ -13,7 +13,7 @@ For the fastest setup, use our automated script:
 cd examples
 
 # Run the automated setup script
-./test_setup.sh
+./setup.sh
 ```
 
 This script will:

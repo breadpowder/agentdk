@@ -1,13 +1,14 @@
 """Top-level agent example demonstrating LangGraph supervisor with multiple agents.
 
 This example shows how to use the AgentDK with a supervisor pattern as specified 
-in design_doc.md.
+in design_doc.md. Enhanced with memory integration for conversation continuity
+and user preference support.
 """
 
 import asyncio
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Dict
 
 # Load environment variables from .env file
 try:
@@ -29,25 +30,145 @@ os.environ.setdefault('MYSQL_DATABASE', 'agentdk_test')
 os.environ.setdefault('LOG_LEVEL', 'INFO')
 os.environ.setdefault('ENVIRONMENT', 'development')
 
+# Set memory system defaults
+os.environ.setdefault('MEMORY_MAX_CONTEXT_TOKENS', '2048')
+os.environ.setdefault('MEMORY_ENABLE_SUMMARIZATION', 'true')
+os.environ.setdefault('MEMORY_CONTEXT_STRATEGY', 'prioritized')
+
 # Import AgentDK components
 from subagent.eda_agent import EDAAgent
 from subagent.research_agent import ResearchAgent
 from agentdk.core.logging_config import ensure_nest_asyncio
 
+# Import memory system
+try:
+    from agentdk.memory import MemoryAwareAgent
+    MEMORY_AVAILABLE = True
+    print("✅ Memory system available")
+except ImportError as e:
+    print(f"⚠️  Memory system not available: {e}")
+    MEMORY_AVAILABLE = False
+
 # Ensure async compatibility for IPython/Jupyter
 ensure_nest_asyncio()
 
-class Agent:
+class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
+    """Enhanced Agent with memory integration.
+    
+    Provides conversation continuity, user preference support,
+    and memory investigation tooling.
+    """
 
-    def __init__(self, model: Any):
+    def __init__(
+        self, 
+        model: Any, 
+        memory: bool = True,
+        user_id: str = "default",
+        memory_config: Optional[Dict[str, Any]] = None
+    ):
+        """Initialize Agent with optional memory integration.
+        
+        Args:
+            model: Language model instance
+            memory: Whether to enable memory system
+            user_id: User identifier for scoped memory
+            memory_config: Optional memory configuration
+        """
         self.model = model
+        
+        # Initialize memory system if available
+        if MEMORY_AVAILABLE:
+            super().__init__(memory=memory, user_id=user_id, memory_config=memory_config)
+        
+        # Create workflow
         self.app = self.create_workflow(model)
-
+    
+    # Memory tool interface is inherited from MemoryAwareAgent
     
     def __call__(self, query: str) -> str:
-        """Call the agent."""
-        result = self.app.invoke({"messages": [{"role": "user", "content": query}]})
+        """Call the agent with memory-enhanced processing.
         
+        Args:
+            query: User's input query
+            
+        Returns:
+            Agent's response
+        """
+        # Use memory-aware processing if available
+        if MEMORY_AVAILABLE and hasattr(self, 'process_with_memory'):
+            enhanced_input = self.process_with_memory(query)
+            
+            # Format memory context for supervisor forwarding
+            memory_context = enhanced_input.get('memory_context')
+            if memory_context:
+                # Format memory context in a more readable way for LLM
+                formatted_context = self._format_memory_context(memory_context)
+                formatted_query = f"User query: {query}\nMemory context: {formatted_context}"
+                enhanced_input['messages'] = [{"role": "user", "content": formatted_query}]
+            else:
+                # No memory context available
+                enhanced_input['messages'] = [{"role": "user", "content": query}]
+        else:
+            # Fallback for non-memory mode
+            enhanced_input = {"messages": [{"role": "user", "content": query}]}
+        
+        # Process with workflow
+        result = self.app.invoke(enhanced_input)
+        
+        # Extract response
+        response = self._extract_response(result)
+        
+        # Finalize with memory if available
+        if MEMORY_AVAILABLE and hasattr(self, 'finalize_with_memory'):
+            return self.finalize_with_memory(query, response)
+        
+        return response
+    
+    def _format_memory_context(self, memory_context: dict) -> str:
+        """Format memory context in a readable way for LLM.
+        
+        Args:
+            memory_context: Raw memory context dictionary
+            
+        Returns:
+            Formatted memory context string
+        """
+        if not memory_context or 'memory_context' not in memory_context:
+            return "No recent conversation history"
+        
+        context_data = memory_context['memory_context']
+        formatted_lines = []
+        
+        # Format working memory (recent conversation)
+        working_memory = context_data.get('working', [])
+        if working_memory:
+            formatted_lines.append("Recent conversation:")
+            for item in working_memory[-3:]:  # Last 3 items
+                content = item.get('content', '')
+                if content.startswith('User:'):
+                    formatted_lines.append(f"  {content}")
+                elif content.startswith('Assistant:'):
+                    formatted_lines.append(f"  {content}")
+        
+        # Format factual memory (user preferences)
+        factual_memory = context_data.get('factual', [])
+        if factual_memory:
+            formatted_lines.append("User preferences:")
+            for item in factual_memory:
+                content = item.get('content', '')
+                formatted_lines.append(f"  - {content}")
+        
+        return "\n".join(formatted_lines) if formatted_lines else "No relevant context available"
+
+    def _extract_response(self, result: Any) -> str:
+        """Extract response content from LangGraph result.
+        
+        Args:
+            result: LangGraph workflow result
+            
+        Returns:
+            Extracted response string
+        """
         # Extract the content from the LangGraph response to match EDAAgent format
         if isinstance(result, dict) and 'messages' in result:
             messages = result['messages']
@@ -62,7 +183,6 @@ class Agent:
         # Fallback: return string representation
         return str(result)
 
-
     def create_workflow(self, model: Any) -> Any:
         """Create a supervisor workflow with research and EDA agents.
         
@@ -71,7 +191,6 @@ class Agent:
             
         Returns:
             LangGraph workflow with supervisor pattern
-
         """
 
         def web_search(query: str) -> str:
@@ -102,39 +221,14 @@ class Agent:
                 name="research_expert",
             )
             
+            # Enhanced supervisor prompt with memory awareness
+            supervisor_prompt = self._create_supervisor_prompt()
+            
             # Create supervisor workflow
             workflow = create_supervisor(
                 [research_agent, eda_agent],
                 model=model,
-                prompt=(
-                    """You are a team supervisor managing a research expert and an EDA agent.
-                    
-                    CRITICAL ROUTING RULES:
-                    
-                    Use 'eda_agent' for ANY question about:
-                    - Database tables, table access, table information
-                    - SQL queries, data exploration, data analysis
-                    - Exploratory data analysis (EDA)
-                    - Financial data analysis
-                    
-                    Use 'research_expert' for:
-                    - Current events, news, web search
-                    - General information not in the database
-                    - Company information not stored in database
-                    
-                    CRITICAL RESPONSE RULES:
-                    1. When an agent provides a response, ALWAYS return the COMPLETE response exactly as provided.
-                    2. If the EDA agent returns SQL queries with results, preserve the ENTIRE response including:
-                       - The SQL code blocks
-                       - The result sections
-                       - All formatting and structure
-                    3. DO NOT extract only the final answer - return the full response with SQL + results.
-                    4. DO NOT summarize, paraphrase, or modify the agent's response in any way.
-                    5. DO NOT modify, edit, or change the agent's response format, content, or structure.
-                    6. Your job is to route to the correct agent and return their complete response unchanged.
-                    
-                    When in doubt about data-related questions, ALWAYS choose eda_agent."""
-                )
+                prompt=supervisor_prompt
             )
             app = workflow.compile()
             
@@ -147,4 +241,69 @@ class Agent:
         except Exception as e:
             print(f"Failed to create workflow: {e}")
             raise
+    
+    def _create_supervisor_prompt(self) -> str:
+        """Create supervisor prompt with optional memory awareness.
+        
+        Returns:
+            Enhanced supervisor prompt
+        """
+        base_prompt = """You are a team supervisor managing a research expert and an EDA agent.
+        
+        CRITICAL ROUTING RULES:
+        
+        Use 'eda_agent' for ANY question about:
+        - Database tables, table access, table information
+        - SQL queries, data exploration, data analysis
+        - Exploratory data analysis (EDA)
+        - Financial data analysis
+        
+        Use 'research_expert' for:
+        - Current events, news, web search
+        - General information not in the database
+        - Company information not stored in database
+        
+        CRITICAL RESPONSE RULES:
+        1. When an agent provides a response, ALWAYS return the COMPLETE response exactly as provided.
+        2. If the EDA agent returns SQL queries with results, preserve the ENTIRE response including:
+           - The SQL code blocks
+           - The result sections
+           - All formatting and structure
+        3. DO NOT extract only the final answer - return the full response with SQL + results.
+        4. DO NOT summarize, paraphrase, or modify the agent's response in any way.
+        5. DO NOT modify, edit, or change the agent's response format, content, or structure.
+        6. Your job is to route to the correct agent and return their complete response unchanged.
+        
+        When in doubt about data-related questions, ALWAYS choose eda_agent."""
+        
+        # Add memory awareness if available
+        if MEMORY_AVAILABLE and hasattr(self, 'get_memory_aware_prompt'):
+            return self.get_memory_aware_prompt(base_prompt)
+        
+        return base_prompt
+    
+    # Fallback methods for when memory is not available
+    def memory_tool(self, command: str) -> str:
+        """Memory investigation tool interface."""
+        if MEMORY_AVAILABLE and hasattr(self, 'memory_tools'):
+            return super().memory_tool(command)
+        return "❌ Memory system not available"
+    
+    def set_preference(self, category: str, key: str, value: Any) -> str:
+        """Set a user preference."""
+        if MEMORY_AVAILABLE and hasattr(self, 'memory'):
+            return super().set_preference(category, key, value)
+        return "❌ Memory system not available"
+    
+    def get_preference(self, category: str, key: str, default: Any = None) -> Any:
+        """Get a user preference."""
+        if MEMORY_AVAILABLE and hasattr(self, 'memory'):
+            return super().get_preference(category, key, default)
+        return default
+    
+    def get_memory_stats(self) -> str:
+        """Get formatted memory statistics."""
+        if MEMORY_AVAILABLE and hasattr(self, 'memory_tools'):
+            return super().get_memory_stats()
+        return "❌ Memory system not available"
 
