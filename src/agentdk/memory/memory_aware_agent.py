@@ -217,6 +217,42 @@ USER PREFERENCE SUPPORT:
         
         return self.memory_tools.execute("stats --detailed")
     
+    def _format_memory_context(self, memory_context: dict) -> str:
+        """Format memory context in a readable way for LLM.
+        
+        Args:
+            memory_context: Raw memory context dictionary
+            
+        Returns:
+            Formatted memory context string
+        """
+        if not memory_context or 'memory_context' not in memory_context:
+            return "No recent conversation history"
+        
+        context_data = memory_context['memory_context']
+        formatted_lines = []
+        
+        # Format working memory (recent conversation)
+        working_memory = context_data.get('working', [])
+        if working_memory:
+            formatted_lines.append("Recent conversation:")
+            for item in working_memory[-3:]:  # Last 3 items
+                content = item.get('content', '')
+                if content.startswith('User:'):
+                    formatted_lines.append(f"  {content}")
+                elif content.startswith('Assistant:'):
+                    formatted_lines.append(f"  {content}")
+        
+        # Format factual memory (user preferences)
+        factual_memory = context_data.get('factual', [])
+        if factual_memory:
+            formatted_lines.append("User preferences:")
+            for item in factual_memory:
+                content = item.get('content', '')
+                formatted_lines.append(f"  - {content}")
+        
+        return "\n".join(formatted_lines) if formatted_lines else "No relevant context available"
+    
     @abstractmethod
     def __call__(self, query: str) -> str:
         """Process a query and return a response.

@@ -39,21 +39,13 @@ os.environ.setdefault('MEMORY_CONTEXT_STRATEGY', 'prioritized')
 from subagent.eda_agent import EDAAgent
 from subagent.research_agent import ResearchAgent
 from agentdk.core.logging_config import ensure_nest_asyncio
-
-# Import memory system
-try:
-    from agentdk.memory import MemoryAwareAgent
-    MEMORY_AVAILABLE = True
-    print("✅ Memory system available")
-except ImportError as e:
-    print(f"⚠️  Memory system not available: {e}")
-    MEMORY_AVAILABLE = False
+from agentdk.memory import MemoryAwareAgent
 
 # Ensure async compatibility for IPython/Jupyter
 ensure_nest_asyncio()
 
-class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
-    """Enhanced Agent with memory integration.
+class App(MemoryAwareAgent):
+    """Enhanced App with memory integration.
     
     Provides conversation continuity, user preference support,
     and memory investigation tooling.
@@ -76,14 +68,11 @@ class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
         """
         self.model = model
         
-        # Initialize memory system if available
-        if MEMORY_AVAILABLE:
-            super().__init__(memory=memory, user_id=user_id, memory_config=memory_config)
+        # Initialize memory system
+        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config)
         
         # Create workflow
         self.app = self.create_workflow(model)
-    
-    # Memory tool interface is inherited from MemoryAwareAgent
     
     def __call__(self, query: str) -> str:
         """Call the agent with memory-enhanced processing.
@@ -94,23 +83,19 @@ class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
         Returns:
             Agent's response
         """
-        # Use memory-aware processing if available
-        if MEMORY_AVAILABLE and hasattr(self, 'process_with_memory'):
-            enhanced_input = self.process_with_memory(query)
-            
-            # Format memory context for supervisor forwarding
-            memory_context = enhanced_input.get('memory_context')
-            if memory_context:
-                # Format memory context in a more readable way for LLM
-                formatted_context = self._format_memory_context(memory_context)
-                formatted_query = f"User query: {query}\nMemory context: {formatted_context}"
-                enhanced_input['messages'] = [{"role": "user", "content": formatted_query}]
-            else:
-                # No memory context available
-                enhanced_input['messages'] = [{"role": "user", "content": query}]
+        # Use memory-aware processing
+        enhanced_input = self.process_with_memory(query)
+        
+        # Format memory context for supervisor forwarding
+        memory_context = enhanced_input.get('memory_context')
+        if memory_context:
+            # Format memory context in a more readable way for LLM
+            formatted_context = self._format_memory_context(memory_context)
+            formatted_query = f"User query: {query}\nMemory context: {formatted_context}"
+            enhanced_input['messages'] = [{"role": "user", "content": formatted_query}]
         else:
-            # Fallback for non-memory mode
-            enhanced_input = {"messages": [{"role": "user", "content": query}]}
+            # No memory context available
+            enhanced_input['messages'] = [{"role": "user", "content": query}]
         
         # Process with workflow
         result = self.app.invoke(enhanced_input)
@@ -118,47 +103,10 @@ class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
         # Extract response
         response = self._extract_response(result)
         
-        # Finalize with memory if available
-        if MEMORY_AVAILABLE and hasattr(self, 'finalize_with_memory'):
-            return self.finalize_with_memory(query, response)
-        
-        return response
+        # Finalize with memory
+        return self.finalize_with_memory(query, response)
     
-    def _format_memory_context(self, memory_context: dict) -> str:
-        """Format memory context in a readable way for LLM.
-        
-        Args:
-            memory_context: Raw memory context dictionary
-            
-        Returns:
-            Formatted memory context string
-        """
-        if not memory_context or 'memory_context' not in memory_context:
-            return "No recent conversation history"
-        
-        context_data = memory_context['memory_context']
-        formatted_lines = []
-        
-        # Format working memory (recent conversation)
-        working_memory = context_data.get('working', [])
-        if working_memory:
-            formatted_lines.append("Recent conversation:")
-            for item in working_memory[-3:]:  # Last 3 items
-                content = item.get('content', '')
-                if content.startswith('User:'):
-                    formatted_lines.append(f"  {content}")
-                elif content.startswith('Assistant:'):
-                    formatted_lines.append(f"  {content}")
-        
-        # Format factual memory (user preferences)
-        factual_memory = context_data.get('factual', [])
-        if factual_memory:
-            formatted_lines.append("User preferences:")
-            for item in factual_memory:
-                content = item.get('content', '')
-                formatted_lines.append(f"  - {content}")
-        
-        return "\n".join(formatted_lines) if formatted_lines else "No relevant context available"
+
 
     def _extract_response(self, result: Any) -> str:
         """Extract response content from LangGraph result.
@@ -243,7 +191,7 @@ class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
             raise
     
     def _create_supervisor_prompt(self) -> str:
-        """Create supervisor prompt with optional memory awareness.
+        """Create supervisor prompt with memory awareness.
         
         Returns:
             Enhanced supervisor prompt
@@ -276,34 +224,6 @@ class Agent(MemoryAwareAgent if MEMORY_AVAILABLE else object):
         
         When in doubt about data-related questions, ALWAYS choose eda_agent."""
         
-        # Add memory awareness if available
-        if MEMORY_AVAILABLE and hasattr(self, 'get_memory_aware_prompt'):
-            return self.get_memory_aware_prompt(base_prompt)
-        
-        return base_prompt
-    
-    # Fallback methods for when memory is not available
-    def memory_tool(self, command: str) -> str:
-        """Memory investigation tool interface."""
-        if MEMORY_AVAILABLE and hasattr(self, 'memory_tools'):
-            return super().memory_tool(command)
-        return "❌ Memory system not available"
-    
-    def set_preference(self, category: str, key: str, value: Any) -> str:
-        """Set a user preference."""
-        if MEMORY_AVAILABLE and hasattr(self, 'memory'):
-            return super().set_preference(category, key, value)
-        return "❌ Memory system not available"
-    
-    def get_preference(self, category: str, key: str, default: Any = None) -> Any:
-        """Get a user preference."""
-        if MEMORY_AVAILABLE and hasattr(self, 'memory'):
-            return super().get_preference(category, key, default)
-        return default
-    
-    def get_memory_stats(self) -> str:
-        """Get formatted memory statistics."""
-        if MEMORY_AVAILABLE and hasattr(self, 'memory_tools'):
-            return super().get_memory_stats()
-        return "❌ Memory system not available"
+        # Add memory awareness
+        return self.get_memory_aware_prompt(base_prompt)
 

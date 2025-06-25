@@ -6,6 +6,7 @@ A powerful Python framework for building intelligent agents using LangGraph and 
 
 - **🤖 Multi-Agent Architecture**: Build sophisticated agent systems using LangGraph supervisor patterns
 - **🔌 MCP Integration**: Seamless integration with Model Context Protocol servers for standardized tool access
+- **🧠 Memory System**: Integrated memory capabilities for conversation continuity and user preferences
 - **🔄 Async Support**: Full async/await support for scalable agent operations with Jupyter/IPython compatibility
 - **🎯 Production Ready**: Comprehensive testing, logging, and error handling
 
@@ -23,54 +24,68 @@ pip install agentdk[all]
 
 See [examples/](examples/) directory for complete implementation details.
 
-### Define Custom Agents
-```python
-from agentdk import SubAgentInterface
-
-class EDAAgent(SubAgentInterface):
-    def _get_default_prompt(self) -> str:
-        return "You are a specialized agent for exploratory data analysis..."
-    
-    async def _create_agent(self) -> None:
-        # Custom agent initialization
-        pass
-
-class ResearchAgent(SubAgentInterface):
-    def _get_default_prompt(self) -> str:
-        return "You are a specialized agent for research and analysis..."
-    
-    async def _create_agent(self) -> None:
-        # Custom agent initialization
-        pass
-```
+### Building Multi-Agent Apps with Memory
 
 ```python
-from agentdk.prompts import get_supervisor_prompt
+from agentdk.memory import MemoryAwareAgent
+from subagent.eda_agent import EDAAgent
+from subagent.research_agent import ResearchAgent
 
-# Create specialized agents
-eda_agent = EDAAgent(
-    llm=llm,
-    mcp_config_path="mcp_config.json", ## see below for MCP conf set up
-    name="data_analyst"
+class App(MemoryAwareAgent):
+    """Enhanced App with memory integration."""
+
+    def __init__(self, model, memory=True, user_id="default", memory_config=None):
+        self.model = model
+        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config)
+        self.app = self.create_workflow(model)
+
+    def create_workflow(self, model):
+        """Create a supervisor workflow with research and EDA agents."""
+        
+        def web_search(query: str) -> str:
+            """Search the web for information."""
+            # Your web search implementation
+            pass
+        
+        try:
+            from langgraph_supervisor import create_supervisor
+            
+            # Create specialized agents
+            eda_agent = EDAAgent(
+                llm=model,
+                mcp_config_path="subagent/mcp_config.json",
+                name="eda_agent"
+            )
+            
+            research_agent = ResearchAgent(
+                llm=model,
+                tools=[web_search],
+                name="research_expert"
+            )
+            
+            # Create supervisor workflow
+            workflow = create_supervisor(
+                [research_agent, eda_agent],
+                model=model,
+                prompt=self._create_supervisor_prompt()
+            )
+            
+            return workflow.compile()
+            
+        except ImportError as e:
+            print(f"Missing dependency: {e}")
+            raise
+
+# Usage with memory integration
+app = App(
+    model=llm,
+    memory=True,
+    user_id="analyst_001"
 )
 
-research_agent = ResearchAgent(
-    llm=llm,
-    tools=[web_search_tool],
-    name="researcher"
-)
-
-# Create supervisor with custom routing
-supervisor = Agent(
-    llm=llm,
-    agents=[eda_agent, research_agent],
-    prompt=get_supervisor_prompt()  # Intelligent routing logic
-)
-
-# Complex multi-step analysis
-result = supervisor("""
-Analyze our customer transaction data and research industry benchmarks 
-to provide insights on our performance compared to competitors.
+# Complex multi-step analysis with memory continuity
+result = app("""
+Analyze customer transaction data
 """)
 ```
 
