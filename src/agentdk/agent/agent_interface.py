@@ -7,7 +7,6 @@ from pathlib import Path
 
 from ..core.mcp_load import get_mcp_config, transform_config_for_mcp_client
 from ..core.logging_config import get_logger, ensure_nest_asyncio
-from ..core.persistent_mcp import PersistentMCPManager, create_persistent_tool
 from ..exceptions import AgentInitializationError, MCPConfigError
 
 
@@ -83,7 +82,6 @@ class SubAgentInterface(AgentInterface):
         
         # MCP integration attributes
         self._mcp_client: Optional[Any] = None
-        self._persistent_mcp_manager: Optional[PersistentMCPManager] = None
         self._mcp_config_path: Optional[Path] = Path(mcp_config_path) if mcp_config_path else None
         self._tools: List[Any] = kwargs.get('tools', [])
         self._initialized: bool = False
@@ -292,9 +290,8 @@ class SubAgentInterface(AgentInterface):
                 
                 full_prompt = f"{system_prompt}\n\nUser Question: {actual_query}"
                 
-                # Use LangGraph agent to process the query with recursion limit
-                config = {"recursion_limit": 5}  # Limit to 5 tool calls to prevent infinite retries
-                result = await self.agent.ainvoke({"messages": [full_prompt]}, config=config)
+                # Use LangGraph agent to process the query
+                result = await self.agent.ainvoke({"messages": [full_prompt]})
                 
                 # Extract the response from LangGraph result
                 if isinstance(result, dict) and 'messages' in result:
@@ -349,10 +346,9 @@ class SubAgentInterface(AgentInterface):
         return user_prompt, ""
     
     async def _setup_mcp_client(self) -> None:
-        """Set up persistent MCP manager from configuration path.
+        """Set up MCP client from configuration path.
         
         Only attempts to load MCP client if mcp_config_path was provided.
-        Uses persistent sessions to avoid subprocess termination issues.
         
         Raises:
             MCPConfigError: If configuration loading fails when path is provided
@@ -372,25 +368,22 @@ class SubAgentInterface(AgentInterface):
             # Transform configuration for MCP client
             client_config = transform_config_for_mcp_client(config)
             
-            # Try to import and setup persistent MCP manager
+            # Try to import and setup MCP client (with fallback)
             try:
-                # Create persistent MCP manager instead of regular client
-                self._persistent_mcp_manager = PersistentMCPManager(client_config)
-                
-                # Also create regular client for backward compatibility if needed
                 from langchain_mcp_adapters.client import MultiServerMCPClient
+                
+                # Create MCP adapter/client
                 self._mcp_client = MultiServerMCPClient(client_config)
                 
-                self.logger.info(f"Persistent MCP manager configured with {len(client_config)} servers")
+                self.logger.info(f"MCP client configured with {len(client_config)} servers")
                 
             except ImportError as import_error:
                 self.logger.warning(f"MCP adapters not available: {import_error}")
                 self.logger.warning("Install with: pip install langchain-mcp-adapters")
                 self._mcp_client = None
-                self._persistent_mcp_manager = None
             
         except Exception as e:
-            self.logger.error(f"Failed to setup persistent MCP manager: {e}")
+            self.logger.error(f"Failed to setup MCP client: {e}")
             raise
     
     async def _load_tools(self) -> None:
@@ -415,22 +408,14 @@ class SubAgentInterface(AgentInterface):
             raise
     
     async def _get_tools_from_mcp(self) -> List[Any]:
-        """Get persistent tools from MCP servers.
-        
-        Uses persistent MCP manager to create tools that maintain
-        session state across calls.
+        """Get tools from MCP client.
         
         Returns:
-            List of persistent MCP tools
+            List of tools from MCP servers
             
         Raises:
             Exception: If MCP client fails to provide tools
         """
-        # Priority 1: Use persistent MCP manager if available
-        if self._persistent_mcp_manager:
-            return await self._get_persistent_tools()
-            
-        # Fallback: Use regular MCP client
         if not self._mcp_client:
             self.logger.warning("No MCP client available")
             return []
@@ -597,64 +582,6 @@ class SubAgentInterface(AgentInterface):
             bool: True if agent is initialized
         """
         return self._initialized
-    
-    async def _get_persistent_tools(self) -> List[Any]:
-        """Get persistent tools from MCP servers.
-        
-        Returns:
-            List of LangChain StructuredTool instances
-        """
-        if not self._persistent_mcp_manager:
-            return []
-            
-        tools = []
-        
-        try:
-            # Import here to avoid circular imports
-            from langchain_mcp_adapters.client import MultiServerMCPClient
-            
-            # Get tool schemas from each server
-            for server_name, server_config in self._persistent_mcp_manager.client_config.items():
-                try:
-                    # Use temporary client to get tool schemas
-                    temp_client = MultiServerMCPClient({server_name: server_config})
-                    temp_tools = await temp_client.get_tools()
-                    
-                    # Create persistent tools using StructuredTool
-                    for tool_schema in temp_tools:
-                        persistent_tool = create_persistent_tool(
-                            tool_schema, server_name, self._persistent_mcp_manager
-                        )
-                        tools.append(persistent_tool)
-                        
-                except Exception as e:
-                    self.logger.error(f"Failed to load tools from {server_name}: {e}")
-                    continue
-                    
-        except ImportError as e:
-            self.logger.error(f"langchain-mcp-adapters not available: {e}")
-            
-        return tools
-    
-    async def cleanup(self):
-        """Cleanup persistent MCP sessions.
-        
-        Should be called when the agent is no longer needed
-        to properly close all persistent connections.
-        """
-        if self._persistent_mcp_manager:
-            await self._persistent_mcp_manager.cleanup()
-            self.logger.info("Cleaned up persistent MCP sessions")
-    
-    async def __aenter__(self):
-        """Async context manager entry."""
-        if not self.is_initialized:
-            await self._initialize()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.cleanup()
     
     @abstractmethod
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:

@@ -47,14 +47,15 @@ fi
 
 # 2. Start docker-compose
 echo "🐳 Starting Docker services..."
-(cd examples && docker-compose down -v >/dev/null 2>&1 || true && docker-compose up -d)
+docker-compose down >/dev/null 2>&1 || true  # Stop any existing containers
+docker-compose up -d
 
 echo "⏳ Waiting for MySQL to be ready..."
 # Wait for MySQL to be healthy
 max_attempts=30
 attempt=1
 while [ $attempt -le $max_attempts ]; do
-    if docker-compose -f examples/docker-compose.yml exec -T mysql mysqladmin ping -u root -pagentdk_password --silent 2>/dev/null; then
+    if docker-compose exec -T mysql mysqladmin ping -u root -pagentdk_password --silent 2>/dev/null; then
         echo "✅ MySQL is ready!"
         break
     fi
@@ -62,7 +63,7 @@ while [ $attempt -le $max_attempts ]; do
     if [ $attempt -eq $max_attempts ]; then
         echo "❌ MySQL failed to start after $max_attempts attempts"
         echo "   Checking MySQL logs:"
-        docker-compose -f examples/docker-compose.yml logs mysql
+        docker-compose logs mysql
         exit 1
     fi
     
@@ -77,15 +78,15 @@ sleep 5
 
 # 4. Verify database setup
 echo "🔍 Verifying database setup..."
-if docker-compose -f examples/docker-compose.yml exec -T mysql mysql -u agentdk_user -pagentdk_user_password agentdk_test -e "SELECT 'Database verified!' as status, COUNT(*) as customer_count FROM customers;" 2>/dev/null; then
+if docker-compose exec -T mysql mysql -u agentdk_user -pagentdk_user_password agentdk_test -e "SELECT 'Database verified!' as status, COUNT(*) as customer_count FROM customers;" 2>/dev/null; then
     echo "✅ Database setup completed successfully!"
 else
     echo "❌ Database verification failed"
     echo "   Checking if tables exist..."
-    docker-compose -f examples/docker-compose.yml exec -T mysql mysql -u agentdk_user -pagentdk_user_password agentdk_test -e "SHOW TABLES;" 2>/dev/null || {
+    docker-compose exec -T mysql mysql -u agentdk_user -pagentdk_user_password agentdk_test -e "SHOW TABLES;" 2>/dev/null || {
         echo "   Error: Could not connect to database or tables don't exist"
         echo "   MySQL logs:"
-        docker-compose -f examples/docker-compose.yml logs mysql | tail -20
+        docker-compose logs mysql | tail -20
         exit 1
     }
 fi

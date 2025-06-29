@@ -76,8 +76,8 @@ class App(MemoryAwareAgent):
     
     def __call__(self, query: str) -> str:
         """Call the agent with memory-enhanced processing.
-
-_       Args:
+        
+        Args:
             query: User's input query
             
         Returns:

@@ -50,7 +50,7 @@ class EDAAgent(SubAgentInterface):
             from langgraph.prebuilt import create_react_agent
             
             # Create react agent with the LLM and wrapped tools
-            self.agent = create_react_agent(self.llm, self._tools, prompt=self._get_default_prompt())
+            self.agent = create_react_agent(self.llm, self._tools)
             
             self.logger.info(f"Created LangGraph agent with {len(self._tools)} tools")
             
@@ -100,23 +100,4 @@ class EDAAgent(SubAgentInterface):
             state['error'] = str(e)
             
             return state
-    
-    def __del__(self):
-        """Cleanup when agent is garbage collected."""
-        # Note: __del__ is not async, so we can't directly call cleanup()
-        # Users should explicitly call cleanup() or use async context manager
-        try:
-            # During Python shutdown, even basic operations can fail
-            # Check if we have the attribute and it's truthy
-            if getattr(self, '_persistent_mcp_manager', None):
-                import warnings
-                warnings.warn(
-                    "EDAAgent is being destroyed without proper cleanup. "
-                    "Consider using 'async with EDAAgent() as agent:' or "
-                    "explicitly calling 'await agent.cleanup()'"
-                )
-        except (ImportError, RuntimeError, AttributeError, TypeError):
-            # Ignore ALL errors during Python shutdown - modules and objects may be unloaded
-            # This includes ImportError, RuntimeError, AttributeError, and TypeError
-            pass
 
