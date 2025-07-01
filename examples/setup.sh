@@ -111,8 +111,8 @@ MYSQL_PASSWORD=agentdk_user_password
 MYSQL_DATABASE=agentdk_test
 
 # LLM Configuration (add your API keys)
-OPENAI_API_KEY=your_openai_key_here
-ANTHROPIC_API_KEY=your_anthropic_key_here
+#OPENAI_API_KEY=your_openai_key_here
+$ANTHROPIC_API_KEY=your_anthropic_key_here
 
 # Logging
 LOG_LEVEL=INFO
