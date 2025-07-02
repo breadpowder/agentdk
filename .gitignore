@@ -218,5 +218,9 @@ design_doc.md
 setup_env.sh
 examples/RESPONSE_CONSISTENCY_FIX.md
 
+# Allow .claude memory system but keep local files private
 .claude/
+CLAUDE.md
 CLAUDE.local.md
+mysql_mcp_server/
+langchain_mcp_server/
