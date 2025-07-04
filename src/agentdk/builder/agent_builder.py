@@ -92,11 +92,20 @@ class AgentBuilder:
             Configured agent that implements SubAgentInterface
             
         Raises:
-            ValueError: If required configuration is missing
+            ValueError: If required configuration is missing or invalid
         """
         # Validate required configuration
-        if 'llm' not in self._config:
+        if 'llm' not in self._config or self._config['llm'] is None:
             raise ValueError("LLM is required. Use .with_llm(llm) to set it.")
+
+        # Validate that either tools or MCP config is provided for functional agent
+        has_tools = 'tools' in self._config and self._config['tools']
+        has_mcp = 'mcp_config_path' in self._config and self._config['mcp_config_path']
+        
+        if not has_tools and not has_mcp:
+            self._logger.warning(
+                "No tools or MCP configuration provided. Agent will have limited functionality."
+            )
 
         # Resolve the prompt
         resolved_prompt = self._resolve_prompt()

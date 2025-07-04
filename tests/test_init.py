@@ -40,7 +40,7 @@ def test_public_api_exports():
 def test_all_exports_list():
     """Test that __all__ contains all expected exports."""
     expected_exports = {
-        'AgentInterface', 'SubAgentInterface', 'create_agent', 'create_eda_agent',
+        'AgentInterface', 'SubAgentInterface', 'Agent', 'create_agent', 'create_eda_agent',
         'AgentConfig', 'AgentDKError', 'MCPConfigError', 'AgentInitializationError',
         'quick_start'
     }

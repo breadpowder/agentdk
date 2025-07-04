@@ -60,8 +60,19 @@ class _PersistentSessionContext:
 
             # Enter the context and keep it alive
             self.session = await self._context_manager.__aenter__()
+            
+            # Validate session is working by trying to initialize it
+            try:
+                # Try to list tools as a basic connectivity test
+                await self.session.list_tools()
+                logger.debug(f"Session validation successful for {self.server_name}")
+            except Exception as validation_error:
+                logger.warning(
+                    f"Session created but validation failed for {self.server_name}: {validation_error}"
+                )
+                # Continue anyway - some servers might not support list_tools immediately
+            
             self._is_active = True
-
             logger.info(f"Persistent session created for server: {self.server_name}")
 
         except Exception as e:
@@ -98,17 +109,27 @@ class _PersistentSessionContext:
 
     async def _cleanup_on_error(self) -> None:
         """Clean up resources after an error during session creation."""
+        cleanup_errors = []
+        
         if self._context_manager:
             try:
                 await self._context_manager.__aexit__(None, None, None)
             except Exception as cleanup_error:
+                cleanup_errors.append(str(cleanup_error))
                 logger.warning(
                     f"Error during error cleanup for {self.server_name}: {cleanup_error}"
                 )
 
+        # Reset state regardless of cleanup success
         self.session = None
         self._context_manager = None
         self._is_active = False
+        
+        # Log summary if there were cleanup errors
+        if cleanup_errors:
+            logger.warning(
+                f"Session cleanup completed with {len(cleanup_errors)} errors for {self.server_name}"
+            )
 
     @property
     def is_active(self) -> bool:

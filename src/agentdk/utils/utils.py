@@ -26,10 +26,12 @@ def get_llm():
         except Exception as e:
             print(f"❌ Anthropic setup failed: {e}")
 
-    else:
-        raise ValueError("No LLM API key found")
-    # Fallback to mock
-    return llm
+    # Both failed or no API keys found
+    raise ValueError(
+        "No LLM available. Either no API keys found or langchain dependencies not installed. "
+        "Please set OPENAI_API_KEY or ANTHROPIC_API_KEY and install: "
+        "pip install langchain-openai langchain-anthropic"
+    )
 
 # Get LLM instance
 llm = get_llm()
