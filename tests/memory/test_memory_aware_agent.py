@@ -1,4 +1,8 @@
-"""Tests for MemoryAwareAgent interface."""
+"""Tests for MemoryAwareAgent interface.
+
+This module tests the memory-aware agent functionality following
+the organized test structure that mirrors src/agentdk/memory/.
+"""
 
 import pytest
 from typing import Any
@@ -39,15 +43,19 @@ class TestMemoryAwareAgent:
     
     @patch('agentdk.memory.memory_aware_agent.MemoryManager')
     @patch('agentdk.memory.memory_aware_agent.MemoryTools')
-    def test_memory_aware_agent_with_memory(self, mock_memory_tools, mock_memory_manager):
-        """Test MemoryAwareAgent with memory enabled."""
+    def test_memory_aware_agent_with_memory(self, mock_memory_tools, mock_memory_manager, mock_memory_config):
+        """Test MemoryAwareAgent with memory enabled using fixtures."""
         # Setup mocks
         mock_memory = MagicMock()
         mock_memory_manager.return_value = mock_memory
         mock_tools = MagicMock()
         mock_memory_tools.return_value = mock_tools
         
-        agent = MockMemoryAgent(memory=True, user_id="test_user")
+        agent = MockMemoryAgent(
+            memory=True, 
+            user_id="test_user",
+            memory_config=mock_memory_config
+        )
         
         # Verify memory components were created
         mock_memory_manager.assert_called_once_with(
