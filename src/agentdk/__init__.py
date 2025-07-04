@@ -21,6 +21,7 @@ Examples:
 
 from .agent.agent_interface import AgentInterface, SubAgentInterface
 from .agent.factory import create_agent, AgentConfig, create_eda_agent
+from .builder.agent_builder import Agent
 from .exceptions import AgentDKError, MCPConfigError, AgentInitializationError
 
 # Public API version
@@ -33,6 +34,7 @@ __all__ = [
     "SubAgentInterface",
     
     # Agent creation
+    "Agent",  # New builder pattern factory
     "create_agent",
     "create_eda_agent",
     "AgentConfig",

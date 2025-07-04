@@ -20,31 +20,18 @@ try:
 except ImportError:
     print("⚠️  python-dotenv not installed. Using system environment variables only.")
     print("   Install with: pip install python-dotenv")
-    
-# Set default environment variables if not already set
-os.environ.setdefault('MYSQL_HOST', 'localhost')
-os.environ.setdefault('MYSQL_PORT', '3306')
-os.environ.setdefault('MYSQL_USER', 'agentdk_user')
-os.environ.setdefault('MYSQL_PASSWORD', 'agentdk_user_password')
-os.environ.setdefault('MYSQL_DATABASE', 'agentdk_test')
-os.environ.setdefault('LOG_LEVEL', 'INFO')
-os.environ.setdefault('ENVIRONMENT', 'development')
-
-# Set memory system defaults
-os.environ.setdefault('MEMORY_MAX_CONTEXT_TOKENS', '2048')
-os.environ.setdefault('MEMORY_ENABLE_SUMMARIZATION', 'true')
-os.environ.setdefault('MEMORY_CONTEXT_STRATEGY', 'prioritized')
 
 # Import AgentDK components
-from subagent.eda_agent import EDAAgent
-from subagent.research_agent import ResearchAgent
+from subagent.eda_agent import create_eda_agent
+from subagent.research_agent import create_research_agent
 from agentdk.core.logging_config import ensure_nest_asyncio
-from agentdk.memory import MemoryAwareAgent
+from agentdk.agent.base_app import BaseMemoryApp
+from agentdk.agent.app_utils import create_supervisor_workflow
 
 # Ensure async compatibility for IPython/Jupyter
 ensure_nest_asyncio()
 
-class App(MemoryAwareAgent):
+class App(BaseMemoryApp):
     """Enhanced App with memory integration.
     
     Provides conversation continuity, user preference support,
@@ -66,70 +53,9 @@ class App(MemoryAwareAgent):
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
         """
-        self.model = model
-        
-        # Initialize memory system
-        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config)
-        
-        # Create workflow
-        self.app = self.create_workflow(model)
+        # Initialize with base class (which handles model, memory, and workflow creation)
+        super().__init__(model=model, memory=memory, user_id=user_id, memory_config=memory_config)
     
-    def __call__(self, query: str) -> str:
-        """Call the agent with memory-enhanced processing.
-        
-        Args:
-            query: User's input query
-            
-        Returns:
-            Agent's response
-        """
-        # Use memory-aware processing
-        enhanced_input = self.process_with_memory(query)
-        
-        # Format memory context for supervisor forwarding
-        memory_context = enhanced_input.get('memory_context')
-        if memory_context:
-            # Format memory context in a more readable way for LLM
-            formatted_context = self._format_memory_context(memory_context)
-            formatted_query = f"User query: {query}\nMemory context: {formatted_context}"
-            enhanced_input['messages'] = [{"role": "user", "content": formatted_query}]
-        else:
-            # No memory context available
-            enhanced_input['messages'] = [{"role": "user", "content": query}]
-        
-        # Process with workflow
-        result = self.app.invoke(enhanced_input)
-        
-        # Extract response
-        response = self._extract_response(result)
-        
-        # Finalize with memory
-        return self.finalize_with_memory(query, response)
-    
-
-
-    def _extract_response(self, result: Any) -> str:
-        """Extract response content from LangGraph result.
-        
-        Args:
-            result: LangGraph workflow result
-            
-        Returns:
-            Extracted response string
-        """
-        # Extract the content from the LangGraph response to match EDAAgent format
-        if isinstance(result, dict) and 'messages' in result:
-            messages = result['messages']
-            if messages:
-                last_message = messages[-1]
-                # Extract content from AIMessage or dict format
-                if hasattr(last_message, 'content'):
-                    return last_message.content
-                elif isinstance(last_message, dict) and 'content' in last_message:
-                    return last_message['content']
-        
-        # Fallback: return string representation
-        return str(result)
 
     def create_workflow(self, model: Any) -> Any:
         """Create a supervisor workflow with research and EDA agents.
@@ -152,43 +78,29 @@ class App(MemoryAwareAgent):
                 "5. **Google (Alphabet)**: 181,269 employees."
             )
         
-        try:
-            from langgraph_supervisor import create_supervisor
-            
-            # Create EDA agent with MCP integration
-            eda_agent = EDAAgent(
-                llm=model,
-                mcp_config_path="subagent/mcp_config.json",
-                name="eda_agent"
-            )
-            
-            # Create research agent with web search tool
-            research_agent = ResearchAgent(
-                llm=model,
-                tools=[web_search],
-                name="research_expert",
-            )
-            
-            # Enhanced supervisor prompt with memory awareness
-            supervisor_prompt = self._create_supervisor_prompt()
-            
-            # Create supervisor workflow
-            workflow = create_supervisor(
-                [research_agent, eda_agent],
-                model=model,
-                prompt=supervisor_prompt
-            )
-            app = workflow.compile()
-            
-            return app
-            
-        except ImportError as e:
-            print(f"Missing required dependency: {e}")
-            print("Please install: pip install langgraph langgraph-supervisor")
-            raise
-        except Exception as e:
-            print(f"Failed to create workflow: {e}")
-            raise
+        # Create EDA agent with MCP integration using builder pattern
+        eda_agent = create_eda_agent(
+            llm=model,
+            mcp_config_path="subagent/mcp_config.json",
+            name="eda_agent"
+        )
+        
+        # Create research agent with web search tool using builder pattern
+        research_agent = create_research_agent(
+            llm=model,
+            tools=[web_search],
+            name="research_expert"
+        )
+        
+        # Enhanced supervisor prompt with memory awareness
+        supervisor_prompt = self._create_supervisor_prompt()
+        
+        # Create supervisor workflow using common utility
+        return create_supervisor_workflow(
+            [research_agent, eda_agent],
+            model,
+            supervisor_prompt
+        )
     
     def _create_supervisor_prompt(self) -> str:
         """Create supervisor prompt with memory awareness.

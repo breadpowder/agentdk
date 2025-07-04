@@ -20,73 +20,66 @@ pip install agentdk[all]
 
 ## 🏁 Quick Start
 
-### Building Custom Multi-Agent Workflows
-
-See [examples/](examples/) directory for complete implementation details.
-
-### Building Multi-Agent Apps with Memory
+### Basic EDA Agent Usage
 
 ```python
-from agentdk.memory import MemoryAwareAgent
-from subagent.eda_agent import EDAAgent
-from subagent.research_agent import ResearchAgent
+from agentdk.agent.factory import create_agent
+from agentdk.agent.agent_interface import AgentConfig
 
-class App(MemoryAwareAgent):
-    """Enhanced App with memory integration."""
+# Set up configuration
+config = AgentConfig(mcp_config_path="examples/subagent/mcp_config.json")
 
-    def __init__(self, model, memory=True, user_id="default", memory_config=None):
-        self.model = model
-        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config)
+# Create EDA agent with MCP integration
+eda_agent = create_agent("eda", config=config, llm=llm)
+
+# Query your database
+result = eda_agent.query("How many customers do we have?")
+print(result)
+
+# Complex analysis
+result = eda_agent.query("Show me the top 5 customers by total account balance")
+print(result)
+```
+
+### Multi-Agent Supervisor Pattern
+
+```python
+from agentdk.agent.base_app import BaseMemoryApp
+
+class App(BaseMemoryApp):
+    """Multi-agent app with supervisor workflow."""
+    
+    def __init__(self, model, memory=True, user_id="default"):
+        super().__init__(model=model, memory=memory, user_id=user_id)
         self.app = self.create_workflow(model)
-
+    
     def create_workflow(self, model):
-        """Create a supervisor workflow with research and EDA agents."""
+        """Create supervisor with EDA and research agents."""
+        from examples.subagent.eda_agent import create_eda_agent
+        from examples.subagent.research_agent import create_research_agent
         
-        def web_search(query: str) -> str:
-            """Search the web for information."""
-            # Your web search implementation
-            pass
+        # Create specialized agents
+        eda_agent = create_eda_agent(model, "examples/subagent/mcp_config.json")
+        research_agent = create_research_agent(model)
         
-        try:
-            from langgraph_supervisor import create_supervisor
-            
-            # Create specialized agents
-            eda_agent = EDAAgent(
-                llm=model,
-                mcp_config_path="subagent/mcp_config.json",
-                name="eda_agent"
-            )
-            
-            research_agent = ResearchAgent(
-                llm=model,
-                tools=[web_search],
-                name="research_expert"
-            )
-            
-            # Create supervisor workflow
-            workflow = create_supervisor(
-                [research_agent, eda_agent],
-                model=model,
-                prompt=self._create_supervisor_prompt()
-            )
-            
-            return workflow.compile()
-            
-        except ImportError as e:
-            print(f"Missing dependency: {e}")
-            raise
+        # Create supervisor workflow
+        return create_supervisor_workflow([eda_agent, research_agent], model)
 
-# Usage with memory integration
-app = App(
-    model=llm,
-    memory=True,
-    user_id="analyst_001"
-)
+# Usage
+app = App(model=llm, memory=True, user_id="analyst_001")
+result = app("Analyze customer transaction patterns and provide insights")
+```
 
-# Complex multi-step analysis with memory continuity
-result = app("""
-Analyze customer transaction data
-""")
+### Jupyter Notebook Integration
+
+```python
+# For Jupyter environments
+from agentdk.core.logging_config import ensure_nest_asyncio
+ensure_nest_asyncio()  # Enables async support in notebooks
+
+# Run interactive analysis
+app = App(model=llm, memory=True)
+result = app("What are the latest customer trends?")
 ```
 
 ### 🔧Set up MCP Servers
@@ -120,39 +113,55 @@ Create a `mcp_config.json` file with your MCP server configuration. **Note: Rela
 
 The relative path `../mysql_mcp_server` is automatically resolved to the absolute path based on the config file's location, making your configuration portable across different systems.
 
-## Examples and Tutorials
-Check out the [examples/](examples/) directory for:
-- **Basic Agent Setup**: Simple agent configuration and usage
-- **Database Integration**: EDA agents with SQL database connectivity  
-- **Multi-Agent Workflows**: Supervisor patterns with multiple specialized agents
-- **MCP Server Integration**: Various MCP server configurations
-- **Jupyter Notebooks**: Interactive examples and tutorials
+## 📚 Examples and Use Cases
+
+Explore the [examples/](examples/) directory for comprehensive demonstrations:
+
+### Core Examples
+- **[agent_app.py](examples/agent_app.py)**: Complete multi-agent supervisor app with memory integration
+- **[agentdk_testing_notebook.ipynb](examples/agentdk_testing_notebook.ipynb)**: Interactive Jupyter notebook with real-time examples
+- **[integration_test.py](examples/integration_test.py)**: Full end-to-end testing and validation
+
+### Specialized Agents
+- **[subagent/eda_agent.py](examples/subagent/eda_agent.py)**: Database analysis agent with MySQL MCP integration
+- **[subagent/research_agent.py](examples/subagent/research_agent.py)**: Web research agent with custom tools
+- **[subagent/mcp_config.json](examples/subagent/mcp_config.json)**: MCP server configuration template
+
+### Infrastructure
+- **[setup.sh](examples/setup.sh)**: Automated environment setup script
+- **[docker-compose.yml](examples/docker-compose.yml)**: MySQL database with sample data
+- **[mysql_mcp_server/](examples/mysql_mcp_server/)**: Complete MCP server implementation
 
 
-## 🔧 Running Examples
-### Environment Setup
+## 🚀 Getting Started
+
+### 1. Quick Setup
 
 ```bash
 git clone https://github.com/breadpowder/agentdk.git
 cd agentdk/examples
-sh setup.sh
+./setup.sh  # Automated setup with MySQL and MCP servers
 ```
 
-The setup script automatically creates your `.env` file from `env.sample`. Configure your environment variables:
-```env
-# LLM Configuration
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
+### 2. Configure Environment
 
-# Database Configuration (for EDA agents)
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=your_username
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=your_database
+```bash
+# Copy template and add your API keys
+cp .env.example .env
+# Edit .env with your OpenAI/Anthropic API keys
+```
 
-# Logging
-LOG_LEVEL=INFO
+### 3. Run Examples
+
+```bash
+# Basic agent usage
+python examples/agent_app.py
+
+# Interactive notebook
+jupyter lab examples/agentdk_testing_notebook.ipynb
+
+# Full integration test
+python examples/integration_test.py
 ```
 
 ### UV Environment Setup (Alternative)

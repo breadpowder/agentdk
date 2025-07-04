@@ -93,6 +93,56 @@ AgentDK supports both environment variables and `.env` file configuration for fl
    # ANTHROPIC_API_KEY=your_anthropic_api_key_here
    ```
 
+## Testing
+
+### Integration Tests
+
+We provide comprehensive end-to-end integration tests that validate the complete AgentDK functionality:
+
+#### Quick Validation
+```bash
+# Run test validation (no database required)
+python run_integration_tests.py
+```
+
+#### Full Integration Test
+```bash
+# Ensure setup is complete first
+./setup.sh
+
+# Set your API key in .env file
+# OPENAI_API_KEY=your_key_here
+# or
+# ANTHROPIC_API_KEY=your_key_here
+
+# Run comprehensive integration test
+python integration_test.py
+```
+
+The integration test validates:
+- ✅ Agent initialization and MCP integration
+- ✅ Memory system functionality  
+- ✅ Persistent session management
+- ✅ Multi-agent supervisor workflow
+- ✅ Error handling and logging
+- ✅ Performance optimization verification
+
+Test results are saved to `integration_test_results.json` for analysis.
+
+### Interactive Testing
+
+For interactive exploration, use the Jupyter notebook:
+
+```bash
+# Start Jupyter Lab
+jupyter lab agentdk_testing_notebook.ipynb
+```
+
+This notebook demonstrates real-time agent usage with memory persistence and provides examples of:
+- Database queries and analysis
+- Memory-aware conversations
+- Multi-agent coordination
+
 ## Usage Examples
 
 ### Basic EDA Agent Usage
