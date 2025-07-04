@@ -1,7 +1,8 @@
 """Unit tests for AgentDK Builder Pattern.
 
 Tests the AgentBuilder class and Agent factory function to ensure
-proper functionality, error handling, and compatibility.
+proper functionality, error handling, and compatibility following
+the organized test structure that mirrors src/agentdk/builder/.
 """
 
 import pytest
@@ -11,8 +12,8 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 
 # Add src to path for testing
-test_dir = Path(__file__).parent
-src_dir = test_dir.parent / 'src'
+test_dir = Path(__file__).parent.parent.parent
+src_dir = test_dir / 'src'
 sys.path.insert(0, str(src_dir))
 
 from agentdk import Agent
@@ -72,9 +73,8 @@ class TestAgentBuilder:
         
         assert builder._config['name'] == name
 
-    def test_method_chaining(self):
-        """Test that all methods support fluent API chaining."""
-        mock_llm = Mock()
+    def test_method_chaining(self, mock_llm, sample_mcp_config):
+        """Test that all methods support fluent API chaining using fixtures."""
         tools = [Mock()]
         
         builder = (Agent()
