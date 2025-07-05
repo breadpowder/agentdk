@@ -12,7 +12,18 @@ from typing import Any, Optional, List
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
 
 from agentdk import Agent
-from .prompts import get_research_agent_prompt
+
+# Handle imports for both CLI and direct usage
+try:
+    from .prompts import get_research_agent_prompt
+except ImportError:
+    # Fallback for CLI usage - import from same directory
+    import os
+    import sys
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    from prompts import get_research_agent_prompt
 
 
 def create_research_agent(
