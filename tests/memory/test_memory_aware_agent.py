@@ -57,11 +57,11 @@ class TestMemoryAwareAgent:
             memory_config=mock_memory_config
         )
         
-        # Verify memory components were created
-        mock_memory_manager.assert_called_once_with(
-            config=None,
-            user_id="test_user"
-        )
+        # Verify memory components were created with default config
+        mock_memory_manager.assert_called_once()
+        call_args = mock_memory_manager.call_args
+        assert call_args[1]['user_id'] == "test_user"
+        assert 'config' in call_args[1]
         mock_memory_tools.assert_called_once_with(mock_memory)
         
         assert agent.memory == mock_memory

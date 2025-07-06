@@ -15,7 +15,7 @@ def get_llm():
             print(f"❌ OpenAI setup failed: {e}")
     
     # Try Anthropic
-    elif os.getenv('ANTHROPIC_API_KEY'):
+    if os.getenv('ANTHROPIC_API_KEY'):
         try:
             from langchain_anthropic import ChatAnthropic
             llm = ChatAnthropic(model="claude-3-haiku-20240307", temperature=0)
@@ -26,12 +26,8 @@ def get_llm():
         except Exception as e:
             print(f"❌ Anthropic setup failed: {e}")
 
-    # Both failed or no API keys found
-    raise ValueError(
-        "No LLM available. Either no API keys found or langchain dependencies not installed. "
-        "Please set OPENAI_API_KEY or ANTHROPIC_API_KEY and install: "
-        "pip install langchain-openai langchain-anthropic"
-    )
+    # No LLM available
+    raise ValueError("No LLM API key found")
 
 # Get LLM instance
 llm = get_llm()

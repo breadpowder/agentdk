@@ -82,6 +82,135 @@ app = App(model=llm, memory=True)
 result = app("What are the latest customer trends?")
 ```
 
+## 🖥️ CLI Usage
+
+AgentDK provides a command-line interface for interactive agent deployment and testing.
+
+### Installation & Setup
+
+The CLI is automatically available after installing AgentDK:
+
+```bash
+# Install with CLI support (includes LLM dependencies)
+pip install agentdk[cli]
+
+# Set up environment variables for LLM access
+export OPENAI_API_KEY="your-openai-key"
+# OR
+export ANTHROPIC_API_KEY="your-anthropic-key"
+```
+
+### Basic CLI Commands
+
+```bash
+# Run an agent interactively
+agentdk run examples/subagent/eda_agent.py
+
+# Resume previous session
+agentdk run examples/subagent/eda_agent.py --resume
+
+# Specify LLM provider
+agentdk run examples/subagent/research_agent.py --llm openai
+
+# Get help
+agentdk --help
+agentdk run --help
+```
+
+### Interactive Session Example
+
+```bash
+$ agentdk run examples/subagent/eda_agent.py
+Loading agent from examples/subagent/eda_agent.py...
+✅ Using OpenAI gpt-4o-mini
+Agent 'eda_agent' ready. Type 'exit' to quit, 'help' for commands.
+
+[user]: How many tables are available?
+[eda_agent]: I can help you analyze your database. Let me check the available tables...
+
+[user]: help
+Available commands:
+  help    - Show this help message
+  clear   - Clear the screen
+  exit    - Exit the session (also: quit, q, Ctrl+D)
+
+[user]: exit
+Session ended. Conversation saved for eda_agent.
+Session saved with 2 interactions.
+Resume with: agentdk run <agent_path> --resume
+```
+
+### Session Management
+
+- **Automatic Saving**: All conversations are automatically saved
+- **Resume Sessions**: Use `--resume` to continue previous conversations
+- **Session Storage**: Sessions stored in `~/.agentdk/sessions/`
+- **Cross-Platform**: Works on Linux, macOS, and Windows
+
+### Supported Agent Patterns
+
+The CLI automatically detects and loads agents using these patterns:
+
+```python
+# Pattern 1: Factory function
+def create_my_agent(llm=None, **kwargs):
+    return Agent().with_llm(llm).build()
+
+# Pattern 2: Direct agent instance
+root_agent = Agent().with_llm(llm).build()
+
+# Pattern 3: Memory-aware agent (with session continuity)
+def create_memory_agent(llm=None, **kwargs):
+    return (Agent()
+        .with_llm(llm)
+        .with_prompt("You are a helpful assistant with memory")
+        .build())
+
+# Pattern 4: Multi-agent supervisor app
+class App(BaseMemoryApp):
+    def create_workflow(self, model):
+        return create_supervisor_workflow([agent1, agent2], model)
+```
+
+### Memory Integration & Session Management
+
+The CLI provides built-in memory and session management:
+
+**Session Persistence:**
+- Conversations automatically saved to `~/.agentdk/sessions/`
+- Use `--resume` to continue previous conversations with full context
+- Memory spans across multiple CLI sessions
+
+**Memory-Enhanced Queries:**
+```bash
+# First session
+$ agentdk run examples/subagent/eda_agent.py
+[user]: What tables are available?
+[eda_agent]: I found 5 tables: customers, accounts, transactions...
+
+# Later session (different day)
+$ agentdk run examples/subagent/eda_agent.py --resume
+Previous session loaded.
+[user]: Show me more details about the customers table
+[eda_agent]: Based on our previous discussion about the available tables, 
+             here are the details for the customers table...
+```
+
+**Advanced Usage Patterns:**
+```bash
+# Test agent with specific queries
+echo "analyze customer trends" | agentdk run examples/agent_app.py
+
+# Batch testing multiple queries
+cat queries.txt | agentdk run examples/subagent/eda_agent.py
+
+# Debug agent initialization
+agentdk run examples/subagent/eda_agent.py --verbose
+
+# Test memory integration
+agentdk run examples/agent_app.py --resume --user-id analyst_001
+```
+
 ### 🔧Set up MCP Servers
 MCP (Model Context Protocol) servers provide standardized tool access. Here's how to configure them:
 

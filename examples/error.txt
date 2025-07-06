@@ -1,0 +1,40 @@
+Code review:
+
+1. agent_inferface.py line 203, the method is deprecated and faulty, remove it
+
+2. agent_inferface.py line 418 remove the importError excepton, use the general one, line 425, don't mute exception
+
+            except ImportError as import_error:
+                self.logger.warning(f"MCP adapters not available: {import_error}")
+                self.logger.warning("Install with: pip install langchain-mcp-adapters")
+                self._mcp_client = None
+                self._persistent_session_manager = None
+                self._cleanup_manager = None
+
+3. persisent_mcp.py line 158-159 if initiate failure, need to fail by raise exceptions and  the message summarzies which server fail and can call for check error logs.
+
+
+4. Fix error
+See below command and execution log:
+print(agent("give me 2 records from table 'trans'"))
+
+Task supervisor with path ('__pregel_pull', 'supervisor') wrote to unknown channel is_last_step, ignoring it.
+Task supervisor with path ('__pregel_pull', 'supervisor') wrote to unknown channel remaining_steps, ignoring it.
+2025-07-01 07:00:46,973 - agentdk - INFO - {"tool": "execute_sql", "args": {"query": "SELECT * FROM transactions LIMIT 2"}}
+2025-07-01 07:00:46,998 - agentdk - INFO - {"tool": "execute_sql", "status": "completed"}
+```sql
+SELECT * FROM transactions LIMIT 2
+```
+
+**Result:**
+
+| transaction_id | account_id | transaction_type | amount  | currency | transaction_date     | description        | reference_number      | status    | merchant_name | category |
+|----------------|------------|------------------|---------|----------|-----------------------|---------------------|-----------------------|-----------|---------------|----------|
+| 1              | 1          | deposit          | 1200.00 | USD      | 2024-01-15 09:30:00   | Payroll deposit      | PAY-20240115-001      | completed | None          | salary   |
+| 2              | 1          | withdrawal       | 80.00   | USD      | 2024-01-16 14:25:00   | ATM withdrawal       | ATM-20240116-001      | completed | None          | cash     |
+
+
+I need you to 
+1. investigate why "Task supervisor with path ('__pregel_pull', 'supervisor') wrote to unknown channe" and we should clean this.
+2. INFO - {"tool": "execute_sql", "status": "completed"}  i need you to check statu to ensure status to be to successful or failed
+
