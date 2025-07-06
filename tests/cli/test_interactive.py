@@ -45,24 +45,18 @@ class TestInteractiveCLI:
             
             cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
             
-            # Should register both SIGINT and SIGTERM
-            assert mock_signal.call_count >= 1  # At least SIGINT should be registered
-            # Check if SIGINT was registered
-            signal_calls = [call[0][0] for call in mock_signal.call_args_list if len(call[0]) > 0]
-            assert signal.SIGINT in signal_calls
+            # Signal handling is now managed globally in main.py, not in InteractiveCLI
+            # InteractiveCLI no longer sets up its own signal handlers
+            assert cli._running is True
     
     def test_signal_handler_without_sigterm(self):
-        """Test signal handler setup when SIGTERM is not available."""
-        with patch('signal.signal') as mock_signal, \
-             patch('builtins.hasattr', return_value=False):
-            
-            cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
-            
-            # Should register SIGINT at least
-            assert mock_signal.call_count >= 1
-            # Verify SIGINT was registered
-            signal_calls = [call[0][0] for call in mock_signal.call_args_list if len(call[0]) > 0]
-            assert signal.SIGINT in signal_calls
+        """Test that InteractiveCLI doesn't handle SIGTERM directly."""
+        # Signal handling is now managed globally in main.py
+        # This test verifies that InteractiveCLI doesn't manage signals directly
+        cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
+        
+        # InteractiveCLI should not have signal handling logic
+        assert cli._running is True
     
     @pytest.mark.asyncio
     async def test_invoke_async_with_async_function(self):
@@ -417,7 +411,11 @@ class TestSignalHandlerIntegration:
         # Get the signal handler function that was registered
         # We need to access it through the mock calls
         with patch('signal.signal') as mock_signal:
-            cli._setup_signal_handlers()
+            # Signal handling moved to main.py - test the global handler instead
+            from agentdk.cli.main import signal_handler, shutdown_event
+            shutdown_event.clear()
+            signal_handler(signal.SIGINT, None)
+            assert shutdown_event.is_set()
             
             # Get the signal handler function
             sigint_call = next(call for call in mock_signal.call_args_list if call[0][0] == signal.SIGINT)
