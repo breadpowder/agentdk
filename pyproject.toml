@@ -36,7 +36,8 @@ dependencies = [
     "sqlparse>=0.4.4,<1.0.0",
     "python-dotenv>=1.0.0",
     "mem0ai>=0.1.111",
-    "click>=8.0.0"
+    "click>=8.0.0",
+    "pytest-asyncio>=1.0.0",
 ]
 
 [project.optional-dependencies]
