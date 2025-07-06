@@ -305,6 +305,8 @@ async def cleanup_and_exit(session_manager):
         logger.error(f"Error during cleanup: {e}")
     
     logger.info("Shutdown complete")
+    # Actually exit the process
+    sys.exit(0)
 
 
 async def handle_sessions_command(args):

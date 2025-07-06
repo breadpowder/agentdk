@@ -477,6 +477,11 @@ class CleanupManager:
             signum: Signal number
             frame: Current stack frame
         """
+        # Avoid spam logging if cleanup is already in progress
+        if self._cleanup_in_progress:
+            logger.debug(f"Signal {signum} received, but cleanup already in progress")
+            return
+            
         logger.info(f"Received signal {signum}, cleaning up MCP sessions")
         
         # Set shutdown event to coordinate with CLI interactive loop
