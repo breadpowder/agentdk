@@ -342,7 +342,7 @@ class TestRunInteractiveSession:
         await run_interactive_session(self.mock_agent, self.agent_name, resume_session=False)
         
         # Verify session manager creation
-        mock_session_manager_class.assert_called_once_with(self.agent_name)
+        mock_session_manager_class.assert_called_once_with(self.agent_name, is_parent_agent=True)
         
         # Verify new session started
         mock_session_manager.start_new_session.assert_called_once()

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
 
-from agentdk.cli.session_manager import SessionManager
+from agentdk.agent.session_manager import SessionManager
 from agentdk.memory.memory_aware_agent import MemoryAwareAgent
 
 
@@ -21,7 +21,7 @@ def temp_session_dir():
 @pytest.fixture
 def session_manager(temp_session_dir):
     """Create a SessionManager instance for testing."""
-    return SessionManager("test_agent", session_dir=temp_session_dir)
+    return SessionManager("test_agent", is_parent_agent=True, session_dir=temp_session_dir)
 
 
 @pytest.fixture
@@ -93,7 +93,7 @@ class TestSessionManager:
         await session_manager.save_interaction("test query", "test response")
         
         # Create new manager instance and load session
-        new_manager = SessionManager("test_agent", session_dir=session_manager.session_dir)
+        new_manager = SessionManager("test_agent", is_parent_agent=True, session_dir=session_manager.session_dir)
         result = await new_manager.load_session()
         
         assert result is True
@@ -302,10 +302,10 @@ async def test_cli_integration_workflow(temp_session_dir):
     with patch('builtins.input', side_effect=['test query', 'exit']), \
          patch('builtins.print') as mock_print, \
          patch('sys.stdin.isatty', return_value=True), \
-         patch('agentdk.cli.session_manager.SessionManager.__init__') as mock_session_init, \
-         patch('agentdk.cli.session_manager.SessionManager.start_new_session') as mock_start, \
-         patch('agentdk.cli.session_manager.SessionManager.save_interaction') as mock_save, \
-         patch('agentdk.cli.session_manager.SessionManager.close') as mock_close:
+         patch('agentdk.agent.session_manager.SessionManager.__init__') as mock_session_init, \
+         patch('agentdk.agent.session_manager.SessionManager.start_new_session') as mock_start, \
+         patch('agentdk.agent.session_manager.SessionManager.save_interaction') as mock_save, \
+         patch('agentdk.agent.session_manager.SessionManager.close') as mock_close:
         
         mock_session_init.return_value = None
         mock_start.return_value = None

@@ -10,6 +10,7 @@ import os
 
 from .memory_manager import MemoryManager
 from .memory_tools import MemoryTools
+from ..agent.session_manager import SessionManager
 
 
 class MemoryAwareAgent(ABC):
@@ -27,7 +28,9 @@ class MemoryAwareAgent(ABC):
         self, 
         memory: bool = True,
         user_id: str = "default",
-        memory_config: Optional[Dict[str, Any]] = None
+        memory_config: Optional[Dict[str, Any]] = None,
+        resume_session: bool = False,
+        is_parent_agent: bool = False
     ):
         """Initialize MemoryAwareAgent with optional memory integration.
         
@@ -35,8 +38,22 @@ class MemoryAwareAgent(ABC):
             memory: Whether to enable memory system
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
+            resume_session: Whether to resume from previous session
+            is_parent_agent: Whether this agent manages sessions (parent agents only)
         """
         self.user_id = user_id
+        self.resume_session = resume_session
+        self.is_parent_agent = is_parent_agent
+        
+        # Initialize session manager for parent agents
+        self.session_manager = None
+        if is_parent_agent:
+            # Get agent name from class name for session management
+            agent_name = self.__class__.__name__.lower().replace("agent", "").replace("app", "app")
+            self.session_manager = SessionManager(
+                agent_name=agent_name,
+                is_parent_agent=True
+            )
         
         # Initialize memory system if available and requested
         self.memory = None

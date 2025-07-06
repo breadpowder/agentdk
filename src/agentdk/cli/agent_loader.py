@@ -42,12 +42,13 @@ class AgentLoader:
         except ImportError:
             raise ImportError("Anthropic not installed. Run: pip install anthropic")
     
-    def load_agent(self, agent_path: Path, llm_provider: Optional[str] = None) -> Any:
+    def load_agent(self, agent_path: Path, llm_provider: Optional[str] = None, resume_session: bool = False) -> Any:
         """Load an agent from the given path.
         
         Args:
             agent_path: Path to Python file or directory containing agent
             llm_provider: Optional LLM provider name
+            resume_session: Whether to resume from previous session
             
         Returns:
             Loaded and configured agent instance
@@ -57,13 +58,13 @@ class AgentLoader:
             ImportError: If required dependencies are missing
         """
         if agent_path.is_file():
-            return self._load_agent_from_file(agent_path, llm_provider)
+            return self._load_agent_from_file(agent_path, llm_provider, resume_session)
         elif agent_path.is_dir():
-            return self._load_agent_from_directory(agent_path, llm_provider)
+            return self._load_agent_from_directory(agent_path, llm_provider, resume_session)
         else:
             raise ValueError(f"Invalid agent path: {agent_path}")
     
-    def _load_agent_from_file(self, file_path: Path, llm_provider: Optional[str]) -> Any:
+    def _load_agent_from_file(self, file_path: Path, llm_provider: Optional[str], resume_session: bool = False) -> Any:
         """Load agent from a Python file."""
         if not file_path.suffix == '.py':
             raise ValueError(f"Agent file must be a Python file (.py), got: {file_path}")
@@ -103,21 +104,21 @@ class AgentLoader:
                     sys.path.remove(path)
         
         # Try different agent discovery patterns
-        agent = self._discover_agent_in_module(module, llm_provider)
+        agent = self._discover_agent_in_module(module, llm_provider, resume_session)
         if agent is None:
             raise ValueError(f"No agent found in {file_path}. Expected factory function or agent instance.")
         
         return agent
     
-    def _load_agent_from_directory(self, dir_path: Path, llm_provider: Optional[str]) -> Any:
+    def _load_agent_from_directory(self, dir_path: Path, llm_provider: Optional[str], resume_session: bool = False) -> Any:
         """Load agent from a directory (package)."""
         init_file = dir_path / "__init__.py"
         if not init_file.exists():
             raise ValueError(f"Directory {dir_path} is not a Python package (missing __init__.py)")
         
-        return self._load_agent_from_file(init_file, llm_provider)
+        return self._load_agent_from_file(init_file, llm_provider, resume_session)
     
-    def _discover_agent_in_module(self, module: Any, llm_provider: Optional[str]) -> Optional[Any]:
+    def _discover_agent_in_module(self, module: Any, llm_provider: Optional[str], resume_session: bool = False) -> Optional[Any]:
         """Discover agent using various patterns."""
         
         # Pattern 1: Look for factory functions (create_*_agent)
@@ -136,7 +137,8 @@ class AgentLoader:
             else:
                 # Try without LLM first, fallback to real LLM or mock if required
                 try:
-                    return factory_func()
+                    # CLI-loaded agents are always parent agents
+                    return factory_func(resume_session=resume_session, is_parent_agent=True)
                 except Exception as e:
                     if "LLM is required" in str(e) or "llm" in str(e).lower():
                         # Try to get a real LLM first
@@ -151,7 +153,8 @@ class AgentLoader:
                         raise ValueError(f"Failed to create agent using {factory_functions[0]}: {e}")
             
             try:
-                return factory_func(llm=llm)
+                # CLI-loaded agents are always parent agents
+                return factory_func(llm=llm, resume_session=resume_session, is_parent_agent=True)
             except Exception as e:
                 raise ValueError(f"Failed to create agent using {factory_functions[0]}: {e}")
         

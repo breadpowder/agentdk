@@ -30,6 +30,8 @@ def create_research_agent(
     llm: Optional[Any] = None,
     tools: Optional[List[Any]] = None,
     name: str = "research_expert",
+    resume_session: bool = False,
+    is_parent_agent: bool = False,
     **kwargs: Any
 ) -> Any:
     """Create a Research agent using builder pattern.
@@ -38,6 +40,8 @@ def create_research_agent(
         llm: Language model instance
         tools: List of research tools (web search, etc.). If not provided, uses empty list
         name: Agent name for identification
+        resume_session: Whether to resume from previous session (default: False)
+        is_parent_agent: Whether this agent manages sessions (default: False for child agents)
         **kwargs: Additional configuration passed to builder
         
     Returns:
@@ -66,6 +70,7 @@ def create_research_agent(
         .with_prompt(get_research_agent_prompt)  # Function from prompts.py
         .with_tools(tools)
         .with_name(name)
+        .with_session(resume_session=resume_session, is_parent_agent=is_parent_agent)
         .build())
 
 

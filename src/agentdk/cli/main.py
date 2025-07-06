@@ -117,8 +117,8 @@ def create_agent_instance(agent_cls_or_func, agent_file: Path, **kwargs):
     # Try to get a basic LLM if none provided
     if 'llm' not in kwargs:
         try:
-            from agentdk.utils.utils import llm
-            kwargs['llm'] = llm
+            from agentdk.utils.utils import get_llm
+            kwargs['llm'] = get_llm()
             logger.info("Using default LLM for agent")
         except Exception as e:
             logger.warning(f"No LLM available: {e}")
@@ -145,7 +145,7 @@ def create_agent_instance(agent_cls_or_func, agent_file: Path, **kwargs):
 async def run_agent_interactive(agent, resume: bool = False):
     """Run agent in interactive mode with session management."""
     import sys
-    from .session_manager import SessionManager
+    from ..agent.session_manager import SessionManager
     
     logger.info("Starting interactive mode (Ctrl+C to exit)")
     
@@ -154,8 +154,8 @@ async def run_agent_interactive(agent, resume: bool = False):
     if agent_name == 'type':
         agent_name = 'agent'  # fallback for unnamed agents
     
-    # Initialize session manager
-    session_manager = SessionManager(agent_name)
+    # Initialize session manager - CLI-loaded agents are always parent agents
+    session_manager = SessionManager(agent_name, is_parent_agent=True)
     
     try:
         if resume:
@@ -236,12 +236,12 @@ async def run_agent_interactive(agent, resume: bool = False):
 
 async def handle_sessions_command(args):
     """Handle sessions subcommands."""
-    from .session_manager import SessionManager
+    from ..agent.session_manager import SessionManager
     import click
     
     if args.sessions_command == "status":
         # Show status for specific agent
-        session_manager = SessionManager(args.agent_name)
+        session_manager = SessionManager(args.agent_name, is_parent_agent=True)
         session_info = session_manager.get_session_info()
         
         if not session_info.get("exists", False):
@@ -274,7 +274,7 @@ async def handle_sessions_command(args):
         click.echo("Available Sessions:")
         for session_file in session_files:
             agent_name = session_file.stem.replace("_session", "")
-            session_manager = SessionManager(agent_name)
+            session_manager = SessionManager(agent_name, is_parent_agent=True)
             session_info = session_manager.get_session_info()
             
             status = "✓" if not session_info.get("corrupted", False) else "✗"
@@ -301,7 +301,7 @@ async def handle_sessions_command(args):
                 click.echo("No sessions directory found")
         elif args.agent_name:
             # Clear specific agent session
-            session_manager = SessionManager(args.agent_name)
+            session_manager = SessionManager(args.agent_name, is_parent_agent=True)
             if session_manager.has_previous_session():
                 session_manager.clear_session()
                 click.echo(f"Cleared session for {args.agent_name}")
@@ -393,7 +393,12 @@ Examples:
             agent_cls_or_func = load_agent_from_file(args.agent_file)
             
             # Create instance with memory enabled by default
-            agent_kwargs = {'memory': True}
+            # CLI-loaded agents are always parent agents
+            agent_kwargs = {
+                'memory': True,
+                'resume_session': args.resume,
+                'is_parent_agent': True
+            }
             
             agent = create_agent_instance(agent_cls_or_func, args.agent_file, **agent_kwargs)
             

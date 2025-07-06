@@ -30,6 +30,8 @@ def create_eda_agent(
     llm: Optional[Any] = None,
     mcp_config_path: Optional[Union[str, Path]] = None,
     name: str = "eda_agent",
+    resume_session: bool = False,
+    is_parent_agent: bool = False,
     **kwargs: Any
 ) -> Any:
     """Create an EDA (Exploratory Data Analysis) agent using builder pattern.
@@ -39,6 +41,8 @@ def create_eda_agent(
         mcp_config_path: Path to MCP configuration file. If not provided,
                         uses default 'mcp_config.json' in same directory
         name: Agent name for identification
+        resume_session: Whether to resume from previous session (default: False)
+        is_parent_agent: Whether this agent manages sessions (default: False for child agents)
         **kwargs: Additional configuration passed to builder
         
     Returns:
@@ -67,6 +71,7 @@ def create_eda_agent(
         .with_prompt(get_eda_agent_prompt)  # Function from prompts.py
         .with_mcp_config(mcp_config_path)
         .with_name(name)
+        .with_session(resume_session=resume_session, is_parent_agent=is_parent_agent)
         .build())
 
 

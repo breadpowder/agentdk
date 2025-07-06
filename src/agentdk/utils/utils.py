@@ -29,6 +29,6 @@ def get_llm():
     # No LLM available
     raise ValueError("No LLM API key found")
 
-# Get LLM instance
-llm = get_llm()
+# Lazy LLM initialization - call get_llm() when needed
+llm = None
 
