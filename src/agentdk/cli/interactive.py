@@ -25,6 +25,8 @@ class InteractiveCLI:
         def signal_handler(signum, frame):
             click.echo("\n\nGracefully shutting down...")
             self._running = False
+            # Exit immediately on Ctrl+C to avoid hanging on input()
+            sys.exit(0)
         
         signal.signal(signal.SIGINT, signal_handler)
         if hasattr(signal, 'SIGTERM'):
@@ -76,21 +78,17 @@ class InteractiveCLI:
     async def _process_query(self, query: str) -> str:
         """Process user query with the agent."""
         try:
-            # Handle different agent interfaces
-            if hasattr(self.agent, 'invoke'):
-                # LangChain-style interface
-                result = await self._invoke_async(self.agent.invoke, {"input": query})
+            # Use the high-level query() method which handles initialization and returns clean strings
+            if hasattr(self.agent, 'query'):
+                # AgentDK agent interface - returns clean string response
+                result = await self._invoke_async(self.agent.query, query)
+                return str(result)  # query() already returns a clean string
             elif hasattr(self.agent, '__call__'):
-                # Direct callable interface
+                # Direct callable interface fallback
                 result = await self._invoke_async(self.agent, query)
-            else:
-                return "Error: Agent does not have a recognized interface (invoke or __call__)"
-            
-            # Extract string response from result
-            if isinstance(result, dict):
-                return result.get('output', str(result))
-            else:
                 return str(result)
+            else:
+                return "Error: Agent does not have a recognized interface (query or __call__)"
                 
         except Exception as e:
             return f"Error: {e}"

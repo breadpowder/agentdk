@@ -158,6 +158,57 @@ def create_my_agent(llm=None, **kwargs):
 
 # Pattern 2: Direct agent instance
 root_agent = Agent().with_llm(llm).build()
+
+# Pattern 3: Memory-aware agent (with session continuity)
+def create_memory_agent(llm=None, **kwargs):
+    return (Agent()
+        .with_llm(llm)
+        .with_prompt("You are a helpful assistant with memory")
+        .build())
+
+# Pattern 4: Multi-agent supervisor app
+class App(BaseMemoryApp):
+    def create_workflow(self, model):
+        return create_supervisor_workflow([agent1, agent2], model)
+```
+
+### Memory Integration & Session Management
+
+The CLI provides built-in memory and session management:
+
+**Session Persistence:**
+- Conversations automatically saved to `~/.agentdk/sessions/`
+- Use `--resume` to continue previous conversations with full context
+- Memory spans across multiple CLI sessions
+
+**Memory-Enhanced Queries:**
+```bash
+# First session
+$ agentdk run examples/subagent/eda_agent.py
+[user]: What tables are available?
+[eda_agent]: I found 5 tables: customers, accounts, transactions...
+
+# Later session (different day)
+$ agentdk run examples/subagent/eda_agent.py --resume
+Previous session loaded.
+[user]: Show me more details about the customers table
+[eda_agent]: Based on our previous discussion about the available tables, 
+             here are the details for the customers table...
+```
+
+**Advanced Usage Patterns:**
+```bash
+# Test agent with specific queries
+echo "analyze customer trends" | agentdk run examples/agent_app.py
+
+# Batch testing multiple queries
+cat queries.txt | agentdk run examples/subagent/eda_agent.py
+
+# Debug agent initialization
+agentdk run examples/subagent/eda_agent.py --verbose
+
+# Test memory integration
+agentdk run examples/agent_app.py --resume --user-id analyst_001
 ```
 
 ### 🔧Set up MCP Servers

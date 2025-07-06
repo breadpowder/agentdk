@@ -13,6 +13,7 @@ name = "agentdk"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "langchain-core" },
     { name = "langchain-mcp-adapters" },
     { name = "langgraph" },
@@ -34,17 +35,23 @@ all = [
     { name = "langchain-openai" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "toml" },
 ]
 anthropic = [
     { name = "langchain-anthropic" },
 ]
+cli = [
+    { name = "langchain-anthropic" },
+    { name = "langchain-openai" },
+]
 dev = [
     { name = "black" },
     { name = "isort" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "toml" },
 ]
@@ -61,10 +68,13 @@ dev = [
 requires-dist = [
     { name = "agentdk", extras = ["dev", "openai", "anthropic"], marker = "extra == 'all'" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0.0" },
+    { name = "click", specifier = ">=8.0.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.13.0" },
     { name = "langchain-anthropic", marker = "extra == 'anthropic'", specifier = ">=0.1.0" },
+    { name = "langchain-anthropic", marker = "extra == 'cli'", specifier = ">=0.1.0" },
     { name = "langchain-core", specifier = ">=0.3.63" },
     { name = "langchain-mcp-adapters", specifier = ">=0.1.7" },
+    { name = "langchain-openai", marker = "extra == 'cli'", specifier = ">=0.3.24" },
     { name = "langchain-openai", marker = "extra == 'openai'", specifier = ">=0.3.24" },
     { name = "langgraph", specifier = ">=0.4.8" },
     { name = "langgraph-supervisor", specifier = ">=0.0.27" },
@@ -74,13 +84,14 @@ requires-dist = [
     { name = "nest-asyncio", specifier = ">=1.6.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.11.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "sqlparse", specifier = ">=0.4.4,<1.0.0" },
     { name = "toml", marker = "extra == 'dev'", specifier = ">=0.10.2" },
 ]
-provides-extras = ["dev", "openai", "anthropic", "all"]
+provides-extras = ["dev", "openai", "anthropic", "cli", "all"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest-cov", specifier = ">=6.2.1" }]
@@ -1252,6 +1263,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/08/ba/45911d754e8eba3d5a841a5ce61a65a685ff1798421ac054f85aa8747dfb/pytest-8.4.1.tar.gz", hash = "sha256:7c67fd69174877359ed9371ec3af8a3d2b04741818c51e5e99cc1742251fa93c", size = 1517714, upload-time = "2025-06-18T05:48:06.109Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/29/16/c8a903f4c4dffe7a12843191437d7cd8e32751d5de349d45d3fe69544e87/pytest-8.4.1-py3-none-any.whl", hash = "sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7", size = 365474, upload-time = "2025-06-18T05:48:03.955Z" },
+]
+
+[[package]]
+name = "pytest-asyncio"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/d4/14f53324cb1a6381bef29d698987625d80052bb33932d8e7cbf9b337b17c/pytest_asyncio-1.0.0.tar.gz", hash = "sha256:d15463d13f4456e1ead2594520216b225a16f781e144f8fdf6c5bb4667c48b3f", size = 46960, upload-time = "2025-05-26T04:54:40.484Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/05/ce271016e351fddc8399e546f6e23761967ee09c8c568bbfbecb0c150171/pytest_asyncio-1.0.0-py3-none-any.whl", hash = "sha256:4f024da9f1ef945e680dc68610b52550e36590a67fd31bb3b4943979a1f90ef3", size = 15976, upload-time = "2025-05-26T04:54:39.035Z" },
 ]
 
 [[package]]
