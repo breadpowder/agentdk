@@ -43,7 +43,8 @@ class App(BaseMemoryApp):
         model: Any, 
         memory: bool = True,
         user_id: str = "default",
-        memory_config: Optional[Dict[str, Any]] = None
+        memory_config: Optional[Dict[str, Any]] = None,
+        resume_session: Optional[bool] = None
     ):
         """Initialize Agent with optional memory integration.
         
@@ -52,9 +53,10 @@ class App(BaseMemoryApp):
             memory: Whether to enable memory system
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
+            resume_session: Whether to resume from previous session (None = no session management)
         """
         # Initialize with base class (which handles model, memory, and workflow creation)
-        super().__init__(model=model, memory=memory, user_id=user_id, memory_config=memory_config)
+        super().__init__(model=model, memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session)
     
 
     def create_workflow(self, model: Any) -> Any:

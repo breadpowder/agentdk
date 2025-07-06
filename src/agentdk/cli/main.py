@@ -117,8 +117,8 @@ def create_agent_instance(agent_cls_or_func, agent_file: Path, **kwargs):
     # Try to get a basic LLM if none provided
     if 'llm' not in kwargs:
         try:
-            from agentdk.utils.utils import llm
-            kwargs['llm'] = llm
+            from agentdk.utils.utils import get_llm
+            kwargs['llm'] = get_llm()
             logger.info("Using default LLM for agent")
         except Exception as e:
             logger.warning(f"No LLM available: {e}")
@@ -142,16 +142,51 @@ def create_agent_instance(agent_cls_or_func, agent_file: Path, **kwargs):
 
 
 
-def run_agent_interactive(agent, resume: bool = False):
-    """Run agent in interactive mode."""
+async def run_agent_interactive(agent, resume: bool = False):
+    """Run agent in interactive mode with session management."""
     import sys
+    from ..agent.session_manager import SessionManager
     
     logger.info("Starting interactive mode (Ctrl+C to exit)")
     
-    if resume:
-        logger.info("Resume mode enabled - previous conversations will be remembered")
+    # Get agent name for session management
+    agent_name = getattr(agent, '__class__').__name__.lower()
+    if agent_name == 'type':
+        agent_name = 'agent'  # fallback for unnamed agents
+    
+    # Initialize session manager for CLI-loaded agents
+    session_manager = SessionManager(agent_name)
     
     try:
+        if resume:
+            logger.info("Resume mode enabled - loading previous session")
+            session_loaded = await session_manager.load_session()
+            
+            # If agent supports memory restoration, restore from session
+            if session_loaded and hasattr(agent, 'restore_from_session'):
+                session_context = session_manager.get_session_context()
+                if session_context:
+                    success = agent.restore_from_session(session_context)
+                    if success:
+                        logger.info("Agent memory restored from session")
+                    else:
+                        logger.warning("Failed to restore agent memory from session")
+        else:
+            logger.info("Starting with fresh memory")
+            await session_manager.start_new_session()
+            
+            # Clear agent memory if supported
+            if hasattr(agent, 'memory') and agent.memory:
+                try:
+                    # Clear working memory for fresh start
+                    working_memory = getattr(agent.memory, 'working_memory', None)
+                    if working_memory and hasattr(working_memory, 'clear'):
+                        working_memory.clear()
+                        logger.debug("Agent working memory cleared for fresh start")
+                except Exception as e:
+                    logger.warning(f"Could not clear agent memory: {e}")
+        
+        # Interactive loop
         while True:
             try:
                 # Read from stdin or prompt
@@ -169,6 +204,14 @@ def run_agent_interactive(agent, resume: bool = False):
                 try:
                     response = agent.query(query) if hasattr(agent, 'query') else str(agent(query))
                     print(response)
+                    
+                    # Save interaction to session
+                    memory_state = {}
+                    if hasattr(agent, 'get_session_state'):
+                        memory_state = agent.get_session_state()
+                    
+                    await session_manager.save_interaction(query, response, memory_state)
+                    
                 except Exception as e:
                     logger.error(f"Agent error: {e}")
                     print(f"Error: {e}")
@@ -182,10 +225,93 @@ def run_agent_interactive(agent, resume: bool = False):
             except KeyboardInterrupt:
                 print("\\nGoodbye!")
                 break
+        
+        # Close session
+        await session_manager.close()
                 
     except Exception as e:
         logger.error(f"Interactive mode error: {e}")
         sys.exit(1)
+
+
+async def handle_sessions_command(args):
+    """Handle sessions subcommands."""
+    from ..agent.session_manager import SessionManager
+    import click
+    
+    if args.sessions_command == "status":
+        # Show status for specific agent
+        session_manager = SessionManager(args.agent_name)
+        session_info = session_manager.get_session_info()
+        
+        if not session_info.get("exists", False):
+            click.echo(f"No session found for agent: {args.agent_name}")
+            return
+        
+        if session_info.get("corrupted", False):
+            click.secho(f"Session corrupted for {args.agent_name}: {session_info.get('error', 'Unknown error')}", fg="red")
+            return
+        
+        click.echo(f"Session Status for {args.agent_name}:")
+        click.echo(f"  Created: {session_info.get('created_at', 'unknown')}")
+        click.echo(f"  Last Updated: {session_info.get('last_updated', 'unknown')}")
+        click.echo(f"  Format Version: {session_info.get('format_version', 'unknown')}")
+        click.echo(f"  Interactions: {session_info.get('interaction_count', 0)}")
+        click.echo(f"  Has Memory State: {session_info.get('has_memory_state', False)}")
+        
+    elif args.sessions_command == "list":
+        # List all sessions
+        session_dir = Path.home() / ".agentdk" / "sessions"
+        if not session_dir.exists():
+            click.echo("No sessions directory found")
+            return
+        
+        session_files = list(session_dir.glob("*_session.json"))
+        if not session_files:
+            click.echo("No sessions found")
+            return
+        
+        click.echo("Available Sessions:")
+        for session_file in session_files:
+            agent_name = session_file.stem.replace("_session", "")
+            session_manager = SessionManager(agent_name)
+            session_info = session_manager.get_session_info()
+            
+            status = "✓" if not session_info.get("corrupted", False) else "✗"
+            interaction_count = session_info.get("interaction_count", 0)
+            last_updated = session_info.get("last_updated", "unknown")
+            
+            click.echo(f"  {status} {agent_name} - {interaction_count} interactions (last: {last_updated})")
+    
+    elif args.sessions_command == "clear":
+        # Clear sessions
+        if args.all:
+            # Clear all sessions
+            session_dir = Path.home() / ".agentdk" / "sessions"
+            if session_dir.exists():
+                session_files = list(session_dir.glob("*_session.json"))
+                for session_file in session_files:
+                    try:
+                        session_file.unlink()
+                        click.echo(f"Cleared session: {session_file.stem.replace('_session', '')}")
+                    except Exception as e:
+                        click.secho(f"Failed to clear {session_file.name}: {e}", fg="red")
+                click.echo(f"Cleared {len(session_files)} sessions")
+            else:
+                click.echo("No sessions directory found")
+        elif args.agent_name:
+            # Clear specific agent session
+            session_manager = SessionManager(args.agent_name)
+            if session_manager.has_previous_session():
+                session_manager.clear_session()
+                click.echo(f"Cleared session for {args.agent_name}")
+            else:
+                click.echo(f"No session found for {args.agent_name}")
+        else:
+            click.echo("Specify agent name or use --all to clear all sessions")
+    
+    else:
+        click.echo("Invalid sessions command")
 
 
 def main():
@@ -199,10 +325,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  agentdk run agent.py                    # Run agent interactively
+  agentdk run agent.py                    # Run agent with fresh memory (default)
+  agentdk run agent.py --resume           # Resume from previous session
   agentdk run examples/eda_agent.py       # Run example agent
   echo "query" | agentdk run agent.py     # Pipe input to agent
-  agentdk run agent.py --resume           # Resume previous session
+  agentdk sessions status my_agent        # Show session status
+  agentdk sessions list                   # List all sessions
+  agentdk sessions clear my_agent         # Clear specific session
+  agentdk sessions clear --all            # Clear all sessions
         """
     )
     
@@ -225,8 +355,24 @@ Examples:
     run_parser.add_argument(
         "--resume",
         action="store_true",
-        help="Resume previous conversation (if agent supports memory)"
+        help="Resume from previous session (default: start with fresh memory)"
     )
+    
+    # Sessions command
+    sessions_parser = subparsers.add_parser("sessions", help="Manage agent sessions")
+    sessions_subparsers = sessions_parser.add_subparsers(dest="sessions_command", help="Session commands")
+    
+    # Status command
+    status_parser = sessions_subparsers.add_parser("status", help="Show session status")
+    status_parser.add_argument("agent_name", help="Agent name to check")
+    
+    # List command  
+    list_parser = sessions_subparsers.add_parser("list", help="List all sessions")
+    
+    # Clear command
+    clear_parser = sessions_subparsers.add_parser("clear", help="Clear sessions")
+    clear_parser.add_argument("agent_name", nargs="?", help="Agent name to clear")
+    clear_parser.add_argument("--all", action="store_true", help="Clear all sessions")
     
     args = parser.parse_args()
     
@@ -246,19 +392,24 @@ Examples:
             # Load agent
             agent_cls_or_func = load_agent_from_file(args.agent_file)
             
-            # Create instance
-            agent_kwargs = {}
-            if args.resume:
-                agent_kwargs['memory'] = True
+            # Create instance with memory enabled by default
+            # CLI-loaded agents are user-facing (session management enabled)
+            agent_kwargs = {
+                'memory': True,
+                'resume_session': args.resume
+            }
             
             agent = create_agent_instance(agent_cls_or_func, args.agent_file, **agent_kwargs)
             
             # Run interactively
-            run_agent_interactive(agent, resume=args.resume)
+            asyncio.run(run_agent_interactive(agent, resume=args.resume))
             
         except Exception as e:
             logger.error(f"Failed to run agent: {e}")
             sys.exit(1)
+    
+    elif args.command == "sessions":
+        asyncio.run(handle_sessions_command(args))
 
 
 if __name__ == "__main__":

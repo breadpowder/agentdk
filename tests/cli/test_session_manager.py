@@ -7,7 +7,7 @@ import asyncio
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
-from agentdk.cli.session_manager import SessionManager
+from agentdk.agent.session_manager import SessionManager
 
 
 class TestSessionManager:
@@ -16,7 +16,7 @@ class TestSessionManager:
     def setup_method(self):
         """Set up test fixtures."""
         self.temp_dir = Path(tempfile.mkdtemp())
-        self.session_manager = SessionManager("test_agent", self.temp_dir)
+        self.session_manager = SessionManager("test_agent", session_dir=self.temp_dir)
     
     def teardown_method(self):
         """Clean up test fixtures."""
@@ -93,7 +93,15 @@ class TestSessionManager:
             result = await self.session_manager.load_session()
         
         assert result is True
-        assert self.session_manager.current_session == session_data
+        # Verify that the session was loaded and migrated correctly
+        current_session = self.session_manager.current_session
+        assert current_session["agent_name"] == session_data["agent_name"]
+        assert current_session["created_at"] == session_data["created_at"]
+        assert current_session["interactions"] == session_data["interactions"]
+        # New fields added by migration
+        assert "format_version" in current_session
+        assert "last_updated" in current_session
+        assert "memory_state" in current_session
     
     @pytest.mark.asyncio
     async def test_load_session_invalid_json(self):

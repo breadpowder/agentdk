@@ -15,13 +15,15 @@ from ..exceptions import AgentInitializationError, MCPConfigError
 class AgentInterface(ABC):
     """Abstract base class for all ML agents."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Optional[Dict[str, Any]] = None, resume_session: Optional[bool] = None) -> None:
         """Initialize the agent with optional configuration.
 
         Args:
             config: Optional configuration dictionary for the agent
+            resume_session: Whether to resume from previous session (None = no session management)
         """
         self.config = config or {}
+        self.resume_session = resume_session
 
     @abstractmethod
     def query(self, user_prompt: str, **kwargs) -> str:
@@ -55,6 +57,7 @@ class SubAgentInterface(AgentInterface):
         mcp_config_path: Optional[Union[str, Path]] = None,
         llm: Optional[Any] = None,
         prompt: Optional[str] = None,
+        resume_session: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the subagent with MCP integration support.
@@ -64,6 +67,7 @@ class SubAgentInterface(AgentInterface):
             mcp_config_path: Optional path to MCP configuration file
             llm: Language model instance
             prompt: System prompt for the agent
+            resume_session: Whether to resume from previous session (None = no session management)
             **kwargs: Additional configuration parameters
         """
         # Prepare config with LLM and prompt
@@ -80,7 +84,7 @@ class SubAgentInterface(AgentInterface):
         if llm:
             config["llm"] = llm
 
-        super().__init__(config)
+        super().__init__(config, resume_session)
 
         # MCP integration attributes
         self._mcp_client: Optional[Any] = None
@@ -675,6 +679,7 @@ class SubAgentWithMCP(SubAgentInterface):
         mcp_config_path: Union[str, Path],
         config: Optional[Dict[str, Any]] = None,
         prompt: Optional[str] = None,
+        resume_session: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the MCP-enabled subagent.
@@ -684,6 +689,7 @@ class SubAgentWithMCP(SubAgentInterface):
             mcp_config_path: Path to MCP configuration file (required)
             config: Optional configuration dictionary
             prompt: System prompt for the agent
+            resume_session: Whether to resume from previous session (None = no session management)
             **kwargs: Additional configuration parameters
             
         Raises:
@@ -706,6 +712,7 @@ class SubAgentWithMCP(SubAgentInterface):
             mcp_config_path=resolved_path,
             llm=llm,
             prompt=prompt,
+            resume_session=resume_session,
             **kwargs
         )
     
@@ -755,6 +762,7 @@ class SubAgentWithoutMCP(SubAgentInterface):
         config: Optional[Dict[str, Any]] = None,
         prompt: Optional[str] = None,
         tools: Optional[List[Any]] = None,
+        resume_session: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the non-MCP subagent.
@@ -764,6 +772,7 @@ class SubAgentWithoutMCP(SubAgentInterface):
             config: Optional configuration dictionary
             prompt: System prompt for the agent
             tools: Optional list of tools to use (e.g., web search, APIs)
+            resume_session: Whether to resume from previous session (None = no session management)
             **kwargs: Additional configuration parameters
         """
         # Ensure MCP config path is None for this agent type
@@ -772,6 +781,7 @@ class SubAgentWithoutMCP(SubAgentInterface):
             mcp_config_path=None,
             llm=llm,
             prompt=prompt,
+            resume_session=resume_session,
             tools=tools or [],
             **kwargs
         )

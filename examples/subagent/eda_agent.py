@@ -30,6 +30,7 @@ def create_eda_agent(
     llm: Optional[Any] = None,
     mcp_config_path: Optional[Union[str, Path]] = None,
     name: str = "eda_agent",
+    resume_session: Optional[bool] = None,
     **kwargs: Any
 ) -> Any:
     """Create an EDA (Exploratory Data Analysis) agent using builder pattern.
@@ -39,6 +40,7 @@ def create_eda_agent(
         mcp_config_path: Path to MCP configuration file. If not provided,
                         uses default 'mcp_config.json' in same directory
         name: Agent name for identification
+        resume_session: Whether to resume from previous session (None = no session management)
         **kwargs: Additional configuration passed to builder
         
     Returns:
@@ -62,12 +64,17 @@ def create_eda_agent(
         mcp_config_path = str(Path(__file__).parent / 'mcp_config.json')
     
     # Create agent using builder pattern
-    return (Agent()
+    builder = (Agent()
         .with_llm(llm)
         .with_prompt(get_eda_agent_prompt)  # Function from prompts.py
         .with_mcp_config(mcp_config_path)
-        .with_name(name)
-        .build())
+        .with_name(name))
+    
+    # Only add session management if explicitly requested
+    if resume_session is not None:
+        builder = builder.with_session(resume_session=resume_session)
+    
+    return builder.build()
 
 
 # Backward compatibility alias - allows existing code to work

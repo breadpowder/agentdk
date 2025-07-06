@@ -10,6 +10,7 @@ import os
 
 from .memory_manager import MemoryManager
 from .memory_tools import MemoryTools
+from ..agent.session_manager import SessionManager
 
 
 class MemoryAwareAgent(ABC):
@@ -27,7 +28,8 @@ class MemoryAwareAgent(ABC):
         self, 
         memory: bool = True,
         user_id: str = "default",
-        memory_config: Optional[Dict[str, Any]] = None
+        memory_config: Optional[Dict[str, Any]] = None,
+        resume_session: Optional[bool] = None
     ):
         """Initialize MemoryAwareAgent with optional memory integration.
         
@@ -35,8 +37,18 @@ class MemoryAwareAgent(ABC):
             memory: Whether to enable memory system
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
+            resume_session: Whether to resume from previous session (None = no session management)
         """
         self.user_id = user_id
+        self.resume_session = resume_session
+        
+        # Initialize session manager for user-facing agents
+        self.session_manager = None
+        if resume_session is not None:
+            # Parameter presence indicates user-facing agent
+            # Get agent name from class name for session management
+            agent_name = self.__class__.__name__.lower().replace("agent", "").replace("app", "app")
+            self.session_manager = SessionManager(agent_name)
         
         # Initialize memory system if available and requested
         self.memory = None
@@ -164,6 +176,76 @@ USER PREFERENCE SUPPORT:
         # Store interaction in memory
         self.store_interaction(query, response)
         return response
+    
+    def restore_from_session(self, session_context: list) -> bool:
+        """Restore agent state from CLI session context.
+        
+        Args:
+            session_context: List of previous interactions from CLI session
+            
+        Returns:
+            bool: True if restoration successful, False otherwise
+        """
+        if not self.memory or not session_context:
+            return False
+        
+        try:
+            # Restore interactions to memory system
+            for interaction in session_context:
+                user_input = interaction.get('user_input', '')
+                agent_response = interaction.get('agent_response', '')
+                
+                if user_input and agent_response:
+                    self.memory.store_interaction(user_input, agent_response)
+            
+            print(f"✅ Restored {len(session_context)} interactions from session")
+            return True
+            
+        except Exception as e:
+            print(f"⚠️  Session restoration failed: {e}")
+            return False
+    
+    def get_session_state(self) -> dict:
+        """Get current session state for CLI persistence.
+        
+        Returns:
+            Dictionary containing session state data
+        """
+        if not self.memory:
+            return {}
+        
+        try:
+            # Get recent interactions from working memory
+            working_memory = getattr(self.memory, 'working_memory', None)
+            if working_memory and hasattr(working_memory, 'get_context'):
+                recent_context = working_memory.get_context()
+                
+                # Convert to CLI session format
+                interactions = []
+                for item in recent_context:
+                    content = item.get('content', '')
+                    if content.startswith('User: '):
+                        # This is a user message, look for corresponding assistant response
+                        user_input = content[6:]  # Remove 'User: ' prefix
+                        interactions.append({'user_input': user_input, 'agent_response': ''})
+                    elif content.startswith('Assistant: ') and interactions:
+                        # This is an assistant response, add to last interaction
+                        agent_response = content[11:]  # Remove 'Assistant: ' prefix
+                        interactions[-1]['agent_response'] = agent_response
+                
+                return {
+                    'memory_state': {
+                        'working_memory': recent_context,
+                        'interaction_count': len(interactions)
+                    },
+                    'interactions': interactions
+                }
+            
+            return {}
+            
+        except Exception as e:
+            print(f"⚠️  Failed to get session state: {e}")
+            return {}
     
     # User preference management methods
     def set_preference(self, category: str, key: str, value: Any) -> str:

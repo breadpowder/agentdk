@@ -37,7 +37,8 @@ class TestBaseMemoryApp:
         mock_super_init.assert_called_once_with(
             memory=True, 
             user_id="default", 
-            memory_config=None
+            memory_config=None,
+            resume_session=None
         )
         
         assert app.model == self.mock_model
@@ -60,7 +61,8 @@ class TestBaseMemoryApp:
         mock_super_init.assert_called_once_with(
             memory=False,
             user_id="test_user",
-            memory_config=memory_config
+            memory_config=memory_config,
+            resume_session=None
         )
         
         assert app.model == self.mock_model
@@ -176,8 +178,11 @@ class TestSupervisorApp:
         assert app.agents_config == []
         assert app.supervisor_prompt is None
         
-        # Verify BaseMemoryApp.__init__ was called
-        mock_super_init.assert_called_once_with(self.mock_model)
+        # Verify BaseMemoryApp.__init__ was called with defaults
+        mock_super_init.assert_called_once_with(
+            self.mock_model,
+            resume_session=None
+        )
     
     @patch('agentdk.agent.base_app.BaseMemoryApp.__init__')
     def test_init_custom_config(self, mock_super_init):
@@ -200,7 +205,8 @@ class TestSupervisorApp:
         mock_super_init.assert_called_once_with(
             self.mock_model,
             memory=False,
-            user_id="test_user"
+            user_id="test_user",
+            resume_session=None
         )
     
     @patch('agentdk.agent.base_app.BaseMemoryApp.__init__')
@@ -392,7 +398,8 @@ class TestSupervisorAppIntegration:
             self.mock_model,
             memory=True,
             user_id="memory_user",
-            memory_config=memory_config
+            memory_config=memory_config,
+            resume_session=None
         )
 
 

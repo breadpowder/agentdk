@@ -85,6 +85,18 @@ class AgentBuilder:
         self._config['name'] = name
         return self
 
+    def with_session(self, resume_session: bool = False) -> 'AgentBuilder':
+        """Set session management for the agent.
+        
+        Args:
+            resume_session: Whether to resume from previous session
+            
+        Returns:
+            Self for method chaining
+        """
+        self._config['resume_session'] = resume_session
+        return self
+
     def build(self) -> SubAgentInterface:
         """Build the agent using generic implementation.
         
@@ -178,7 +190,8 @@ class AgentBuilder:
                     'llm': builder_config.get('llm'),
                     'prompt': builder_config.get('resolved_prompt'),
                     'name': builder_config.get('name', 'generic_agent'),
-                    'tools': builder_config.get('tools', [])
+                    'tools': builder_config.get('tools', []),
+                    'resume_session': builder_config.get('resume_session')
                 }
                 
                 # Add MCP config if provided
