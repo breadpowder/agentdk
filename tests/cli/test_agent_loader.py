@@ -75,6 +75,7 @@ class TestAgentLoader:
         """Test discovering direct agent instances in module."""
         # Create a mock module with agent instance
         mock_agent = Mock()
+        # Add __call__ as a real attribute instead of using del
         mock_agent.__call__ = Mock()
         
         mock_module = Mock()
@@ -83,8 +84,13 @@ class TestAgentLoader:
             'some_function': Mock()
         }
         
+        def custom_hasattr(obj, attr):
+            if obj == mock_agent and attr in ['__call__', 'invoke']:
+                return True
+            return hasattr(obj, attr)
+        
         with patch('builtins.dir', return_value=list(mock_module.__dict__.keys())):
-            with patch('builtins.hasattr', side_effect=lambda obj, attr: attr in ['__call__', 'invoke']):
+            with patch('builtins.hasattr', side_effect=custom_hasattr):
                 result = self.loader._discover_agent_in_module(mock_module, None)
                 assert result == mock_agent
     
@@ -96,9 +102,16 @@ class TestAgentLoader:
             'some_variable': "value"
         }
         
+        def custom_hasattr(obj, attr):
+            # For testing, return False for agent-like attributes
+            if attr in ['__call__', 'invoke']:
+                return False
+            return hasattr(obj, attr)
+        
         with patch('builtins.dir', return_value=list(mock_module.__dict__.keys())):
-            result = self.loader._discover_agent_in_module(mock_module, None)
-            assert result is None
+            with patch('builtins.hasattr', side_effect=custom_hasattr):
+                result = self.loader._discover_agent_in_module(mock_module, None)
+                assert result is None
 
 
 class TestAgentLoaderIntegration:

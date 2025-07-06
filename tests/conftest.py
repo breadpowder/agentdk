@@ -7,9 +7,20 @@ following the organized test structure that mirrors src/agentdk/.
 import pytest
 import tempfile
 import os
+import asyncio
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
 from typing import Dict, Any
+
+# Ensure nest_asyncio is available for tests
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    pass
+
+# Configure asyncio for pytest
+pytest_plugins = ('pytest_asyncio',)
 
 
 @pytest.fixture
