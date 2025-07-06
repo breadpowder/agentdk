@@ -478,6 +478,15 @@ class CleanupManager:
             frame: Current stack frame
         """
         logger.info(f"Received signal {signum}, cleaning up MCP sessions")
+        
+        # Set shutdown event to coordinate with CLI interactive loop
+        try:
+            from agentdk.cli.main import shutdown_event
+            shutdown_event.set()
+            logger.debug("Shutdown event set for CLI coordination")
+        except ImportError:
+            logger.debug("CLI main module not available, skipping shutdown event")
+        
         self._sync_cleanup()
 
     def _ipython_cleanup(self) -> None:

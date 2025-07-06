@@ -389,9 +389,8 @@ async def handle_sessions_command(args):
 
 def main():
     """Main CLI entry point."""
-    # Set up signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Note: Signal handlers are managed by the MCP system in persistent_mcp.py
+    # We coordinate with shutdown_event which gets set by the MCP signal handler
     
     parser = argparse.ArgumentParser(
         description="AgentDK CLI - Run intelligent agents",
