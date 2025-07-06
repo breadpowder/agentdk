@@ -16,41 +16,26 @@ import click
 class SessionManager:
     """Manages session persistence for parent agent interactions."""
     
-    def __init__(self, agent_name: str, is_parent_agent: bool = False, session_dir: Optional[Path] = None):
+    def __init__(self, agent_name: str, session_dir: Optional[Path] = None):
         """Initialize SessionManager.
         
         Args:
             agent_name: Name of the agent
-            is_parent_agent: Whether this agent is a parent agent (manages sessions)
             session_dir: Optional directory for session files
         """
         self.agent_name = agent_name
-        self.is_parent_agent = is_parent_agent
         self.session_dir = session_dir or Path.home() / ".agentdk" / "sessions"
         self.current_session: Dict[str, Any] = {}
         
-        # Only create session infrastructure for parent agents
-        if self.is_parent_agent:
-            self.session_file = self.session_dir / f"{agent_name}_session.json"
-            self.session_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            self.session_file = None
+        # Always create session infrastructure when SessionManager is instantiated
+        self.session_file = self.session_dir / f"{agent_name}_session.json"
+        self.session_dir.mkdir(parents=True, exist_ok=True)
         
         # Format version for compatibility
         self.format_version = "1.0"
     
-    def should_manage_session(self) -> bool:
-        """Check if this agent should manage sessions.
-        
-        Returns:
-            bool: True if this is a parent agent that should manage sessions
-        """
-        return self.is_parent_agent and self.session_file is not None
-    
     async def start_new_session(self):
         """Start a new session, clearing any previous session data."""
-        if not self.should_manage_session():
-            return
         
         self.current_session = {
             "agent_name": self.agent_name,
@@ -73,8 +58,6 @@ class SessionManager:
         Returns:
             bool: True if session was loaded, False if no previous session exists
         """
-        if not self.should_manage_session():
-            return False
         
         if not self.session_file.exists():
             click.echo(f"No previous session found for {self.agent_name}")
@@ -126,8 +109,6 @@ class SessionManager:
     
     async def save_interaction(self, user_input: str, agent_response: str, memory_state: Optional[Dict] = None):
         """Save a single interaction to the current session."""
-        if not self.should_manage_session():
-            return
         
         interaction = {
             "timestamp": datetime.now().isoformat(),
@@ -147,8 +128,6 @@ class SessionManager:
     
     async def _save_session_to_file(self):
         """Save current session data to file."""
-        if not self.should_manage_session():
-            return
         
         try:
             with open(self.session_file, 'w', encoding='utf-8') as f:
@@ -158,8 +137,6 @@ class SessionManager:
     
     async def close(self):
         """Close the session and perform final cleanup."""
-        if not self.should_manage_session():
-            return
         
         # Final save
         await self._save_session_to_file()
@@ -176,15 +153,11 @@ class SessionManager:
         Returns:
             List of previous interactions that can be used for context
         """
-        if not self.should_manage_session():
-            return []
         
         return self.current_session.get("interactions", [])
     
     def clear_session(self):
         """Clear the current session and remove session file."""
-        if not self.should_manage_session():
-            return
         
         if self.session_file.exists():
             self.session_file.unlink()
@@ -203,7 +176,7 @@ class SessionManager:
         Returns:
             bool: True if format is valid and compatible
         """
-        if not self.should_manage_session() or not self.session_file.exists():
+        if not self.session_file.exists():
             return False
         
         try:
@@ -250,7 +223,7 @@ class SessionManager:
     
     async def _backup_corrupted_session(self):
         """Backup a corrupted session file for debugging."""
-        if not self.should_manage_session() or not self.session_file.exists():
+        if not self.session_file.exists():
             return
         
         backup_file = self.session_dir / f"{self.agent_name}_session_corrupted_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -267,8 +240,6 @@ class SessionManager:
         Returns:
             Dictionary containing memory state data
         """
-        if not self.should_manage_session():
-            return {}
         
         return self.current_session.get("memory_state", {})
     
@@ -278,8 +249,6 @@ class SessionManager:
         Args:
             memory_state: Dictionary containing memory state data
         """
-        if not self.should_manage_session():
-            return
         
         self.current_session["memory_state"] = memory_state
         self.current_session["last_updated"] = datetime.now().isoformat()
@@ -298,11 +267,9 @@ class SessionManager:
         Returns:
             Dictionary containing session info
         """
-        if not self.should_manage_session():
-            return {"exists": False, "agent_name": self.agent_name, "is_parent_agent": False}
         
         if not self.session_file.exists():
-            return {"exists": False, "agent_name": self.agent_name, "is_parent_agent": True}
+            return {"exists": False, "agent_name": self.agent_name}
         
         try:
             with open(self.session_file, 'r', encoding='utf-8') as f:
@@ -316,7 +283,6 @@ class SessionManager:
                 "format_version": data.get("format_version", "unknown"),
                 "interaction_count": len(data.get("interactions", [])),
                 "has_memory_state": bool(data.get("memory_state")),
-                "is_parent_agent": True
             }
         except Exception as e:
             return {
@@ -324,5 +290,4 @@ class SessionManager:
                 "agent_name": self.agent_name,
                 "error": str(e),
                 "corrupted": True,
-                "is_parent_agent": True
             }

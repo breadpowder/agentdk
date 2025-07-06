@@ -16,7 +16,7 @@ class TestSessionManager:
     def setup_method(self):
         """Set up test fixtures."""
         self.temp_dir = Path(tempfile.mkdtemp())
-        self.session_manager = SessionManager("test_agent", is_parent_agent=True, session_dir=self.temp_dir)
+        self.session_manager = SessionManager("test_agent", session_dir=self.temp_dir)
     
     def teardown_method(self):
         """Clean up test fixtures."""

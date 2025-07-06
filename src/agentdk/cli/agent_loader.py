@@ -137,8 +137,8 @@ class AgentLoader:
             else:
                 # Try without LLM first, fallback to real LLM or mock if required
                 try:
-                    # CLI-loaded agents are always parent agents
-                    return factory_func(resume_session=resume_session, is_parent_agent=True)
+                    # CLI-loaded agents are user-facing (session management enabled)
+                    return factory_func(resume_session=resume_session)
                 except Exception as e:
                     if "LLM is required" in str(e) or "llm" in str(e).lower():
                         # Try to get a real LLM first
@@ -153,8 +153,8 @@ class AgentLoader:
                         raise ValueError(f"Failed to create agent using {factory_functions[0]}: {e}")
             
             try:
-                # CLI-loaded agents are always parent agents
-                return factory_func(llm=llm, resume_session=resume_session, is_parent_agent=True)
+                # CLI-loaded agents are user-facing (session management enabled)
+                return factory_func(llm=llm, resume_session=resume_session)
             except Exception as e:
                 raise ValueError(f"Failed to create agent using {factory_functions[0]}: {e}")
         

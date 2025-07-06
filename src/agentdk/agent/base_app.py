@@ -27,8 +27,7 @@ class BaseMemoryApp(MemoryAwareAgent):
         memory: bool = True,
         user_id: str = "default",
         memory_config: Optional[Dict[str, Any]] = None,
-        resume_session: bool = False,
-        is_parent_agent: bool = False
+        resume_session: Optional[bool] = None
     ):
         """Initialize BaseMemoryApp with memory integration.
         
@@ -37,13 +36,12 @@ class BaseMemoryApp(MemoryAwareAgent):
             memory: Whether to enable memory system
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
-            resume_session: Whether to resume from previous session
-            is_parent_agent: Whether this agent manages sessions (parent agents only)
+            resume_session: Whether to resume from previous session (None = no session management)
         """
         self.model = model
         
         # Initialize memory system
-        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session, is_parent_agent=is_parent_agent)
+        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session)
         
         # Create workflow using subclass implementation
         self.app = self.create_workflow(model)
@@ -115,8 +113,7 @@ class SupervisorApp(BaseMemoryApp):
         model: Any, 
         agents_config: List[Dict[str, Any]] = None,
         supervisor_prompt: str = None,
-        resume_session: bool = False,
-        is_parent_agent: bool = False,
+        resume_session: Optional[bool] = None,
         **kwargs
     ):
         """Initialize SupervisorApp with agent configuration.
@@ -125,14 +122,13 @@ class SupervisorApp(BaseMemoryApp):
             model: Language model instance
             agents_config: List of agent configurations
             supervisor_prompt: Custom supervisor prompt
-            resume_session: Whether to resume from previous session
-            is_parent_agent: Whether this agent manages sessions (parent agents only)
+            resume_session: Whether to resume from previous session (None = no session management)
             **kwargs: Additional arguments passed to BaseMemoryApp
         """
         self.agents_config = agents_config or []
         self.supervisor_prompt = supervisor_prompt
         
-        super().__init__(model, resume_session=resume_session, is_parent_agent=is_parent_agent, **kwargs)
+        super().__init__(model, resume_session=resume_session, **kwargs)
     
     def create_workflow(self, model: Any) -> Any:
         """Create supervisor workflow with configured agents.

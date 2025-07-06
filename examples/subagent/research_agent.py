@@ -30,8 +30,7 @@ def create_research_agent(
     llm: Optional[Any] = None,
     tools: Optional[List[Any]] = None,
     name: str = "research_expert",
-    resume_session: bool = False,
-    is_parent_agent: bool = False,
+    resume_session: Optional[bool] = None,
     **kwargs: Any
 ) -> Any:
     """Create a Research agent using builder pattern.
@@ -40,8 +39,7 @@ def create_research_agent(
         llm: Language model instance
         tools: List of research tools (web search, etc.). If not provided, uses empty list
         name: Agent name for identification
-        resume_session: Whether to resume from previous session (default: False)
-        is_parent_agent: Whether this agent manages sessions (default: False for child agents)
+        resume_session: Whether to resume from previous session (None = no session management)
         **kwargs: Additional configuration passed to builder
         
     Returns:
@@ -65,13 +63,17 @@ def create_research_agent(
         tools = []
     
     # Create agent using builder pattern
-    return (Agent()
+    builder = (Agent()
         .with_llm(llm)
         .with_prompt(get_research_agent_prompt)  # Function from prompts.py
         .with_tools(tools)
-        .with_name(name)
-        .with_session(resume_session=resume_session, is_parent_agent=is_parent_agent)
-        .build())
+        .with_name(name))
+    
+    # Only add session management if explicitly requested
+    if resume_session is not None:
+        builder = builder.with_session(resume_session=resume_session)
+    
+    return builder.build()
 
 
 # Backward compatibility alias - allows existing code to work

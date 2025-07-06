@@ -154,8 +154,8 @@ async def run_agent_interactive(agent, resume: bool = False):
     if agent_name == 'type':
         agent_name = 'agent'  # fallback for unnamed agents
     
-    # Initialize session manager - CLI-loaded agents are always parent agents
-    session_manager = SessionManager(agent_name, is_parent_agent=True)
+    # Initialize session manager for CLI-loaded agents
+    session_manager = SessionManager(agent_name)
     
     try:
         if resume:
@@ -241,7 +241,7 @@ async def handle_sessions_command(args):
     
     if args.sessions_command == "status":
         # Show status for specific agent
-        session_manager = SessionManager(args.agent_name, is_parent_agent=True)
+        session_manager = SessionManager(args.agent_name)
         session_info = session_manager.get_session_info()
         
         if not session_info.get("exists", False):
@@ -274,7 +274,7 @@ async def handle_sessions_command(args):
         click.echo("Available Sessions:")
         for session_file in session_files:
             agent_name = session_file.stem.replace("_session", "")
-            session_manager = SessionManager(agent_name, is_parent_agent=True)
+            session_manager = SessionManager(agent_name)
             session_info = session_manager.get_session_info()
             
             status = "✓" if not session_info.get("corrupted", False) else "✗"
@@ -301,7 +301,7 @@ async def handle_sessions_command(args):
                 click.echo("No sessions directory found")
         elif args.agent_name:
             # Clear specific agent session
-            session_manager = SessionManager(args.agent_name, is_parent_agent=True)
+            session_manager = SessionManager(args.agent_name)
             if session_manager.has_previous_session():
                 session_manager.clear_session()
                 click.echo(f"Cleared session for {args.agent_name}")
@@ -393,11 +393,10 @@ Examples:
             agent_cls_or_func = load_agent_from_file(args.agent_file)
             
             # Create instance with memory enabled by default
-            # CLI-loaded agents are always parent agents
+            # CLI-loaded agents are user-facing (session management enabled)
             agent_kwargs = {
                 'memory': True,
-                'resume_session': args.resume,
-                'is_parent_agent': True
+                'resume_session': args.resume
             }
             
             agent = create_agent_instance(agent_cls_or_func, args.agent_file, **agent_kwargs)

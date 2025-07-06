@@ -21,7 +21,7 @@ def temp_session_dir():
 @pytest.fixture
 def session_manager(temp_session_dir):
     """Create a SessionManager instance for testing."""
-    return SessionManager("test_agent", is_parent_agent=True, session_dir=temp_session_dir)
+    return SessionManager("test_agent", session_dir=temp_session_dir)
 
 
 @pytest.fixture
@@ -93,7 +93,7 @@ class TestSessionManager:
         await session_manager.save_interaction("test query", "test response")
         
         # Create new manager instance and load session
-        new_manager = SessionManager("test_agent", is_parent_agent=True, session_dir=session_manager.session_dir)
+        new_manager = SessionManager("test_agent", session_dir=session_manager.session_dir)
         result = await new_manager.load_session()
         
         assert result is True

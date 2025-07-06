@@ -129,8 +129,8 @@ async def run_interactive_session(agent: Any, agent_name: str, resume_session: b
         agent_name: Name of the agent for display and session management
         resume_session: Whether to resume the previous session
     """
-    # Initialize session manager - CLI agents are always parent agents
-    session_manager = SessionManager(agent_name, is_parent_agent=True)
+    # Initialize session manager for CLI agents
+    session_manager = SessionManager(agent_name)
     
     if resume_session:
         await session_manager.load_session()

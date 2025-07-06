@@ -85,18 +85,16 @@ class AgentBuilder:
         self._config['name'] = name
         return self
 
-    def with_session(self, resume_session: bool = False, is_parent_agent: bool = False) -> 'AgentBuilder':
-        """Set session management parameters for the agent.
+    def with_session(self, resume_session: bool = False) -> 'AgentBuilder':
+        """Set session management for the agent.
         
         Args:
             resume_session: Whether to resume from previous session
-            is_parent_agent: Whether this agent manages sessions (parent agents only)
             
         Returns:
             Self for method chaining
         """
         self._config['resume_session'] = resume_session
-        self._config['is_parent_agent'] = is_parent_agent
         return self
 
     def build(self) -> SubAgentInterface:
@@ -193,8 +191,7 @@ class AgentBuilder:
                     'prompt': builder_config.get('resolved_prompt'),
                     'name': builder_config.get('name', 'generic_agent'),
                     'tools': builder_config.get('tools', []),
-                    'resume_session': builder_config.get('resume_session', False),
-                    'is_parent_agent': builder_config.get('is_parent_agent', False)
+                    'resume_session': builder_config.get('resume_session')
                 }
                 
                 # Add MCP config if provided
