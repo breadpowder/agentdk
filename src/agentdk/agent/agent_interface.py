@@ -1,6 +1,7 @@
 """Abstract agent interface for ML agents with MCP integration."""
 
 import asyncio
+import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
 from pathlib import Path
@@ -659,3 +660,147 @@ class SubAgentInterface(AgentInterface):
             Dict[str, Any]: Updated state dictionary
         """
         pass
+
+
+class SubAgentWithMCP(SubAgentInterface):
+    """Subagent that requires MCP configuration for tool loading.
+    
+    This class is designed for agents that need MCP tools to function properly,
+    such as database agents, SQL agents, or file system agents.
+    """
+    
+    def __init__(
+        self,
+        llm: Any,
+        mcp_config_path: Union[str, Path],
+        config: Optional[Dict[str, Any]] = None,
+        prompt: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the MCP-enabled subagent.
+
+        Args:
+            llm: Language model instance (required)
+            mcp_config_path: Path to MCP configuration file (required)
+            config: Optional configuration dictionary
+            prompt: System prompt for the agent
+            **kwargs: Additional configuration parameters
+            
+        Raises:
+            ValueError: If mcp_config_path is not provided
+        """
+        if not mcp_config_path:
+            raise ValueError("mcp_config_path is required for SubAgentWithMCP")
+        
+        # Set up logger early so it's available for path resolution
+        from ..core.logging_config import set_log_level
+        set_log_level("INFO")  # Set default log level
+        self.logger = get_logger()
+        
+        # Resolve the MCP config path relative to the agent's location
+        resolved_path = self._resolve_mcp_config_path(mcp_config_path)
+        
+        # Pass the resolved path to the parent constructor
+        super().__init__(
+            config=config,
+            mcp_config_path=resolved_path,
+            llm=llm,
+            prompt=prompt,
+            **kwargs
+        )
+    
+    def _resolve_mcp_config_path(self, mcp_config_path: Union[str, Path]) -> Path:
+        """Resolve MCP config path relative to the agent's file location.
+        
+        Args:
+            mcp_config_path: Relative or absolute path to MCP config
+            
+        Returns:
+            Resolved absolute path to MCP config
+        """
+        config_path = Path(mcp_config_path)
+        
+        # If it's already absolute, return as-is
+        if config_path.is_absolute():
+            return config_path.resolve()
+        
+        # For relative paths, resolve relative to the agent's file location
+        try:
+            # Get the file where this agent class is defined
+            agent_file = inspect.getfile(self.__class__)
+            agent_dir = Path(agent_file).parent
+            
+            # Resolve the config path relative to agent directory
+            resolved_path = (agent_dir / config_path).resolve()
+            
+            self.logger.debug(f"Resolved MCP config path: {config_path} -> {resolved_path}")
+            return resolved_path
+            
+        except (OSError, TypeError) as e:
+            self.logger.warning(f"Could not determine agent file location: {e}")
+            # Fallback to resolving relative to current working directory
+            return config_path.resolve()
+
+
+class SubAgentWithoutMCP(SubAgentInterface):
+    """Subagent that does not require MCP configuration.
+    
+    This class is designed for agents that work with external APIs,
+    web services, or other non-MCP tools.
+    """
+    
+    def __init__(
+        self,
+        llm: Any,
+        config: Optional[Dict[str, Any]] = None,
+        prompt: Optional[str] = None,
+        tools: Optional[List[Any]] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the non-MCP subagent.
+
+        Args:
+            llm: Language model instance (required)
+            config: Optional configuration dictionary
+            prompt: System prompt for the agent
+            tools: Optional list of tools to use (e.g., web search, APIs)
+            **kwargs: Additional configuration parameters
+        """
+        # Ensure MCP config path is None for this agent type
+        super().__init__(
+            config=config,
+            mcp_config_path=None,
+            llm=llm,
+            prompt=prompt,
+            tools=tools or [],
+            **kwargs
+        )
+    
+    async def _initialize(self) -> None:
+        """Initialize the agent without MCP setup.
+        
+        Overrides the parent method to skip MCP initialization entirely.
+        """
+        if self._initialized:
+            self.logger.debug("Agent already initialized, skipping")
+            return
+
+        try:
+            # Skip MCP setup completely - no MCP client or tools from MCP
+            # Just use any tools that were provided directly
+            self.logger.info(f"Initializing agent with {len(self._tools)} provided tools")
+            
+            # Create LangGraph agent (agent-specific implementation)
+            await self._create_langgraph_agent()
+
+            self._initialized = True
+            self.logger.info(
+                f"Agent {self.__class__.__name__} initialized successfully (no MCP)"
+            )
+
+        except Exception as e:
+            # Wrap exceptions in AgentInitializationError
+            raise AgentInitializationError(
+                f"Failed to initialize agent {self.__class__.__name__}: {e}",
+                agent_type=self.__class__.__name__,
+            ) from e
