@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch
 import agentdk
 from agentdk import (
-    AgentInterface, SubAgentInterface, create_agent, create_eda_agent,
+    AgentInterface, SubAgentInterface, create_agent,
     AgentConfig, AgentDKError, MCPConfigError, AgentInitializationError,
     quick_start
 )
@@ -25,7 +25,6 @@ def test_public_api_exports():
     
     # Test agent creation functions
     assert hasattr(agentdk, 'create_agent')
-    assert hasattr(agentdk, 'create_eda_agent')
     assert hasattr(agentdk, 'AgentConfig')
     
     # Test exceptions
@@ -40,7 +39,7 @@ def test_public_api_exports():
 def test_all_exports_list():
     """Test that __all__ contains all expected exports."""
     expected_exports = {
-        'AgentInterface', 'SubAgentInterface', 'Agent', 'create_agent', 'create_eda_agent',
+        'AgentInterface', 'SubAgentInterface', 'Agent', 'create_agent',
         'AgentConfig', 'AgentDKError', 'MCPConfigError', 'AgentInitializationError',
         'quick_start'
     }
@@ -65,7 +64,6 @@ def test_quick_start_function():
         assert "Installation:" in printed_content
         assert "Basic Usage:" in printed_content
         assert "create_agent" in printed_content
-        assert "create_eda_agent" in printed_content
 
 
 def test_imports_work_correctly():
@@ -73,13 +71,12 @@ def test_imports_work_correctly():
     # Test that we can import all main components without issues
     try:
         from agentdk import (
-            AgentInterface, SubAgentInterface, create_agent, create_eda_agent,
+            AgentInterface, SubAgentInterface, create_agent,
             AgentConfig, AgentDKError, MCPConfigError, AgentInitializationError
         )
         
         # Test that they are callable/classes as expected
         assert callable(create_agent)
-        assert callable(create_eda_agent)
         assert isinstance(AgentConfig, type)
         assert isinstance(AgentDKError, type)
         assert isinstance(MCPConfigError, type)

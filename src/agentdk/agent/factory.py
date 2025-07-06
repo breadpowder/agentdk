@@ -103,46 +103,6 @@ def create_agent(
         ) from e
 
 
-def create_eda_agent(
-    llm: Optional[Any] = None,
-    prompt: Optional[str] = None,
-    mcp_config_path: Optional[Union[str, Path]] = None,
-    **kwargs: Any
-) -> SubAgentInterface:
-    """Create an EDA (Exploratory Data Analysis) agent.
-    
-    This function provides backward compatibility with the target usage pattern:
-    eda_agent = EDAAgent(llm=llm, prompt=prompt_defined)
-    
-    Args:
-        llm: Language model instance
-        prompt: System prompt for the agent (alias for system_prompt)
-        mcp_config_path: Path to MCP configuration file
-        **kwargs: Additional configuration parameters
-    
-    Returns:
-        Configured EDA agent instance
-    
-    Examples:
-        # Target usage pattern from design_doc.md
-        eda_agent = create_eda_agent(llm=llm, prompt=prompt_defined)
-        
-        # With MCP configuration
-        eda_agent = create_eda_agent(
-            llm=llm, 
-            prompt=prompt_defined,
-            mcp_config_path='examples/subagent/mcp_config.json'
-        )
-    """
-    # Create configuration with backward compatibility mapping
-    config = AgentConfig(
-        llm=llm,
-        system_prompt=prompt,  # Map 'prompt' to 'system_prompt'
-        mcp_config_path=mcp_config_path,
-        **kwargs
-    )
-    
-    return create_agent('eda', config=config)
 
 
 def _get_agent_class(agent_type: str) -> Type[SubAgentInterface]:
@@ -159,7 +119,6 @@ def _get_agent_class(agent_type: str) -> Type[SubAgentInterface]:
     """
     # Registry of supported agent types
     agent_registry = {
-        'eda': _get_eda_agent_class,
         'custom': _get_custom_agent_class,
     }
     
@@ -173,46 +132,6 @@ def _get_agent_class(agent_type: str) -> Type[SubAgentInterface]:
     return agent_registry[agent_type]()
 
 
-def _get_eda_agent_class() -> Type[SubAgentInterface]:
-    """Get the EDA agent class.
-    
-    Returns:
-        EDA agent class
-        
-    Raises:
-        AgentInitializationError: If EDA agent cannot be imported
-    """
-    try:
-        # Import EDA agent from examples (dynamic import to avoid circular dependencies)
-        import importlib.util
-        import sys
-        from pathlib import Path
-        
-        # Try to import from examples directory
-        examples_path = Path("examples/subagent/eda_agent.py")
-        if examples_path.exists():
-            spec = importlib.util.spec_from_file_location("eda_agent", examples_path)
-            if spec and spec.loader:
-                eda_module = importlib.util.module_from_spec(spec)
-                sys.modules["eda_agent"] = eda_module
-                spec.loader.exec_module(eda_module)
-                
-                # Look for EDA agent class
-                for name in dir(eda_module):
-                    obj = getattr(eda_module, name)
-                    if (inspect.isclass(obj) and 
-                        issubclass(obj, SubAgentInterface) and 
-                        obj != SubAgentInterface):
-                        return obj
-        
-        # Fallback: create a basic EDA agent class
-        return _create_basic_eda_agent_class()
-        
-    except Exception as e:
-        raise AgentInitializationError(
-            f"Failed to load EDA agent class: {e}",
-            agent_type="eda"
-        ) from e
 
 
 def _get_custom_agent_class() -> Type[SubAgentInterface]:
@@ -224,48 +143,6 @@ def _get_custom_agent_class() -> Type[SubAgentInterface]:
     return _create_basic_agent_class("CustomAgent")
 
 
-def _create_basic_eda_agent_class() -> Type[SubAgentInterface]:
-    """Create a basic EDA agent class as fallback.
-    
-    Returns:
-        Basic EDA agent class
-    """
-    class BasicEDAAgent(SubAgentInterface):
-        """Basic EDA agent implementation."""
-        
-        def __init__(self, config: Optional[AgentConfig] = None, **kwargs: Any) -> None:
-            # Extract parameters for SubAgentInterface
-            mcp_config_path = None
-            if config:
-                mcp_config_path = config.mcp_config_path
-            
-            super().__init__(
-                config=config.extra_config if config else kwargs,
-                mcp_config_path=mcp_config_path,
-                **kwargs
-            )
-            
-            self._config = config
-        
-        def query(self, user_prompt: str, **kwargs: Any) -> str:
-            """Process a user query for EDA tasks."""
-            return f"EDA analysis for: {user_prompt}"
-        
-        def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
-            """Process state for LangGraph integration."""
-            # Basic state processing for EDA tasks
-            user_input = state.get('user_input', '')
-            
-            # Perform EDA analysis (placeholder)
-            analysis_result = self.query(user_input)
-            
-            # Update state
-            state['eda_analysis'] = analysis_result
-            state['agent_output'] = analysis_result
-            
-            return state
-    
-    return BasicEDAAgent
 
 
 def _create_basic_agent_class(class_name: str) -> Type[SubAgentInterface]:

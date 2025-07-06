@@ -14,13 +14,10 @@ Examples:
         config = AgentConfig(mcp_config_path='path/to/config.json')
         agent = create_agent('custom', config=config)
     
-    Backward compatible EDA agent:
-        from agentdk import create_eda_agent
-        eda_agent = create_eda_agent(llm=llm, prompt=prompt_defined)
 """
 
 from .agent.agent_interface import AgentInterface, SubAgentInterface
-from .agent.factory import create_agent, AgentConfig, create_eda_agent
+from .agent.factory import create_agent, AgentConfig
 from .builder.agent_builder import Agent
 from .exceptions import AgentDKError, MCPConfigError, AgentInitializationError
 
@@ -36,7 +33,6 @@ __all__ = [
     # Agent creation
     "Agent",  # New builder pattern factory
     "create_agent",
-    "create_eda_agent",
     "AgentConfig",
     
     # Exceptions
@@ -67,9 +63,6 @@ def quick_start() -> None:
         config = AgentConfig(mcp_config_path='path/to/config.json')
         agent = create_agent('custom', config=config, llm=your_llm)
     
-    🔄 Backward Compatible (EDA Agent):
-        from agentdk import create_eda_agent
-        eda_agent = create_eda_agent(llm=llm, prompt=prompt_defined)
     
     🚀 LangGraph Integration:
         from langgraph.prebuilt import create_supervisor
