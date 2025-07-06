@@ -398,9 +398,7 @@ class TestRunInteractiveSession:
 class TestSignalHandlerIntegration:
     """Test signal handler integration and behavior."""
     
-    @patch('sys.exit')
-    @patch('click.echo')
-    def test_signal_handler_functionality(self, mock_echo, mock_exit):
+    def test_signal_handler_functionality(self):
         """Test signal handler function behavior."""
         mock_agent = Mock()
         mock_session_manager = AsyncMock()
