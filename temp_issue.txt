@@ -1,0 +1,15 @@
+  Description: current agentdk does not support human-in-the-loop and the feature will enhance the interative        │
+│   capabilites with human. Typical use case 1. critical decision need human input. 2. if failed x times in an subagent, e.g. toll calling. it can fallback to human input and ask for more       │
+│   infromation and next step.  3. after an agent solves critical issues,provide human-in-the-loop to add the experience into memory. 
+
+
+Requirement: 
+
+1.needs to support fallback and checkpoints so if for example the execution fails after human feedback and the execution can start from failed node after get the human feedback 
+
+2.implementation needs to be in sub-agent and agent level      
+in   @src/agentdk. The can be used directly integrated into existing agent and new agent without extra work. reference: langraph prebuild toolnode and  loops and conditional edges: 
+
+
+Reference:
+Langgraph features including ToolNode, loops and conditional edges, retry policy, time travel checkpoints.

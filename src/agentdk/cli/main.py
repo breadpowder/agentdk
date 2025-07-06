@@ -14,11 +14,20 @@ from agentdk.core.logging_config import get_logger, set_log_level
 
 logger = get_logger(__name__)
 
+# Global shutdown event for coordinating signal handling with async code
+shutdown_event = asyncio.Event()
 
 def signal_handler(signum, frame):
-    """Handle interrupt signals gracefully."""
-    logger.info("Received interrupt signal, shutting down...")
-    sys.exit(0)
+    """Handle interrupt signals gracefully by setting shutdown event."""
+    logger.info("Received interrupt signal, initiating graceful shutdown...")
+    # Use set_result on a future to signal from sync context to async context
+    try:
+        # Try to set the event if there's an active loop
+        loop = asyncio.get_running_loop()
+        loop.call_soon_threadsafe(shutdown_event.set)
+    except RuntimeError:
+        # No active loop, set the event directly
+        shutdown_event.set()
 
 
 def setup_dynamic_path(agent_file: Path):
@@ -147,6 +156,9 @@ async def run_agent_interactive(agent, resume: bool = False):
     import sys
     from ..agent.session_manager import SessionManager
     
+    # Clear any previous shutdown state
+    shutdown_event.clear()
+    
     logger.info("Starting interactive mode (Ctrl+C to exit)")
     
     # Get agent name for session management
@@ -186,18 +198,26 @@ async def run_agent_interactive(agent, resume: bool = False):
                 except Exception as e:
                     logger.warning(f"Could not clear agent memory: {e}")
         
-        # Interactive loop
-        while True:
+        # Interactive loop with shutdown event coordination
+        while not shutdown_event.is_set():
             try:
-                # Read from stdin or prompt
+                # Check for shutdown event while getting input
                 if sys.stdin.isatty():
-                    query = input(">>> ")
+                    # Interactive mode - use non-blocking input check
+                    query = await get_user_input_async()
+                    if query is None:  # Shutdown event was set
+                        break
                 else:
+                    # Pipe/file mode - read all input at once
                     query = sys.stdin.read().strip()
                     if not query:
                         break
                 
                 if query.lower() in ['exit', 'quit', 'bye']:
+                    break
+                
+                # Check shutdown event before processing
+                if shutdown_event.is_set():
                     break
                 
                 # Process query
@@ -226,12 +246,65 @@ async def run_agent_interactive(agent, resume: bool = False):
                 print("\\nGoodbye!")
                 break
         
-        # Close session
-        await session_manager.close()
+        # Graceful cleanup
+        await cleanup_and_exit(session_manager)
                 
     except Exception as e:
         logger.error(f"Interactive mode error: {e}")
+        await cleanup_and_exit(session_manager)
         sys.exit(1)
+
+
+async def get_user_input_async():
+    """Get user input asynchronously while checking for shutdown events."""
+    import sys
+    
+    try:
+        # Use asyncio to run input() in a thread so it doesn't block
+        loop = asyncio.get_event_loop()
+        
+        # Create tasks for both input and shutdown event
+        input_task = loop.run_in_executor(None, lambda: input(">>> "))
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        
+        # Wait for whichever completes first
+        done, pending = await asyncio.wait(
+            [input_task, shutdown_task], 
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel any pending tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        
+        # Return result if input completed, None if shutdown
+        if input_task in done:
+            return input_task.result()
+        else:
+            return None
+            
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
+async def cleanup_and_exit(session_manager):
+    """Perform graceful cleanup before exit."""
+    try:
+        logger.info("Performing graceful shutdown...")
+        print("\nGracefully shutting down...")
+        
+        # Save session state
+        await session_manager.close()
+        logger.info("Session state saved successfully")
+        
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+    
+    logger.info("Shutdown complete")
 
 
 async def handle_sessions_command(args):

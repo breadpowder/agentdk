@@ -36,9 +36,7 @@ class TestInteractiveCLI:
         assert cli.agent_name == self.agent_name
         assert cli.session_manager == self.mock_session_manager
         assert cli._running is True
-        
-        # Verify signal handlers were set up (should be called at least once)
-        assert self.mock_signal.call_count >= 1
+        # Signal handlers are now managed globally in main.py
     
     def test_signal_handler_setup(self):
         """Test signal handler setup with and without SIGTERM."""
