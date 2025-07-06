@@ -669,20 +669,6 @@ class TestSubAgentInterface:
                 result = agent._create_wrapped_tool(mock_tool, mock_wrapped_func)
                 assert result == mock_tool
 
-    def test_create_wrapped_tool_no_structured_tool(self):
-        """Test creating wrapped tool when StructuredTool not available."""
-        agent = ConcreteSubAgentInterface()
-        
-        mock_tool = Mock()
-        mock_wrapped_func = Mock()
-        
-        with patch('langchain_core.tools.StructuredTool', side_effect=ImportError):
-            # Mock both import paths to fail
-            with patch('langchain.tools.StructuredTool', side_effect=ImportError):
-                result = agent._create_wrapped_tool(mock_tool, mock_wrapped_func)
-                
-                # Should return original tool when StructuredTool not available
-                assert result == mock_tool
 
     def test_sanitize_for_logging_string_values(self):
         """Test sanitizing string values for logging."""

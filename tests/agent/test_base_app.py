@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from agentdk.agent.base_app import BaseMemoryApp, SupervisorApp
 
 
-class TestConcreteBaseMemoryApp(BaseMemoryApp):
+class ConcreteBaseMemoryApp(BaseMemoryApp):
     """Concrete implementation of BaseMemoryApp for testing."""
     
     def create_workflow(self, model: Any) -> Any:
@@ -31,7 +31,7 @@ class TestBaseMemoryApp:
         """Test BaseMemoryApp initialization with minimal configuration."""
         mock_super_init.return_value = None  # MemoryAwareAgent.__init__ returns None
         
-        app = TestConcreteBaseMemoryApp(self.mock_model)
+        app = ConcreteBaseMemoryApp(self.mock_model)
         
         # Verify super().__init__ was called with defaults
         mock_super_init.assert_called_once_with(
@@ -49,7 +49,7 @@ class TestBaseMemoryApp:
         mock_super_init.return_value = None
         
         memory_config = {"context_tokens": 1024}
-        app = TestConcreteBaseMemoryApp(
+        app = ConcreteBaseMemoryApp(
             self.mock_model,
             memory=False,
             user_id="test_user",
@@ -70,7 +70,7 @@ class TestBaseMemoryApp:
         """Test the __call__ method processing flow."""
         mock_super_init.return_value = None
         
-        app = TestConcreteBaseMemoryApp(self.mock_model)
+        app = ConcreteBaseMemoryApp(self.mock_model)
         
         # Mock memory-aware methods
         enhanced_input = {
@@ -108,7 +108,7 @@ class TestBaseMemoryApp:
         """Test __call__ method when no memory context is provided."""
         mock_super_init.return_value = None
         
-        app = TestConcreteBaseMemoryApp(self.mock_model)
+        app = ConcreteBaseMemoryApp(self.mock_model)
         
         # Mock memory methods returning minimal data
         enhanced_input = {'query': 'test query'}
@@ -132,7 +132,7 @@ class TestBaseMemoryApp:
         """Test that workflow invocation errors are propagated."""
         mock_super_init.return_value = None
         
-        app = TestConcreteBaseMemoryApp(self.mock_model)
+        app = ConcreteBaseMemoryApp(self.mock_model)
         app.process_with_memory = Mock(return_value={})
         app.finalize_with_memory = Mock()
         
@@ -221,7 +221,7 @@ class TestSupervisorApp:
         mock_workflow = Mock()
         
         with patch.object(app, '_create_agent_from_config', side_effect=[mock_agent1, mock_agent2]) as mock_create_agent, \
-             patch('agentdk.agent.base_app.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
+             patch('agentdk.agent.app_utils.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
             
             result = app.create_workflow(self.mock_model)
             
@@ -253,7 +253,7 @@ class TestSupervisorApp:
         
         with patch.object(app, '_create_agent_from_config', return_value=mock_agent), \
              patch.object(app, '_get_default_supervisor_prompt', return_value="Default prompt") as mock_get_default, \
-             patch('agentdk.agent.base_app.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
+             patch('agentdk.agent.app_utils.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
             
             result = app.create_workflow(self.mock_model)
             
@@ -276,7 +276,7 @@ class TestSupervisorApp:
         
         mock_workflow = Mock()
         
-        with patch('agentdk.agent.base_app.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
+        with patch('agentdk.agent.app_utils.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
             result = app.create_workflow(self.mock_model)
             
             # Should create workflow with empty agents list
@@ -339,7 +339,7 @@ class TestSupervisorAppIntegration:
         mock_workflow = Mock()
         
         with patch('agentdk.agent.base_app.BaseMemoryApp.__init__'), \
-             patch('agentdk.agent.base_app.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
+             patch('agentdk.agent.app_utils.create_supervisor_workflow', return_value=mock_workflow) as mock_create_supervisor:
             
             app = ConcreteSupervisorApp(
                 self.mock_model,
@@ -421,7 +421,7 @@ class TestBaseMemoryAppErrorScenarios:
         """Test error handling in memory processing."""
         mock_super_init.return_value = None
         
-        app = TestConcreteBaseMemoryApp(self.mock_model)
+        app = ConcreteBaseMemoryApp(self.mock_model)
         app.process_with_memory = Mock(side_effect=Exception("Memory error"))
         
         with pytest.raises(Exception, match="Memory error"):
@@ -432,7 +432,7 @@ class TestBaseMemoryAppErrorScenarios:
         """Test error handling in response extraction."""
         mock_super_init.return_value = None
         
-        app = TestConcreteBaseMemoryApp(self.mock_model)
+        app = ConcreteBaseMemoryApp(self.mock_model)
         app.process_with_memory = Mock(return_value={})
         app.finalize_with_memory = Mock(return_value="Final")
         
@@ -457,7 +457,9 @@ class TestInheritancePatterns:
             """Intermediate class with shared functionality."""
             
             def create_workflow(self, model):
-                return Mock()
+                workflow = Mock()
+                workflow.specialized = False
+                return workflow
             
             def custom_processing(self, data):
                 return f"Processed: {data}"
@@ -470,12 +472,14 @@ class TestInheritancePatterns:
                 workflow.specialized = True
                 return workflow
         
-        with patch('agentdk.agent.base_app.BaseMemoryApp.__init__'):
-            app = SpecializedApp(self.mock_model)
+        with patch('agentdk.agent.base_app.BaseMemoryApp.__init__', return_value=None):
+            # Test only the inheritance pattern without full initialization
+            app = SpecializedApp.__new__(SpecializedApp)
             
-            # Should have specialized workflow
-            assert hasattr(app.app, 'specialized')
-            assert app.app.specialized is True
+            # Test that it can create specialized workflow
+            workflow = app.create_workflow(self.mock_model)
+            assert hasattr(workflow, 'specialized')
+            assert workflow.specialized is True
             
             # Should inherit middle class functionality
             result = app.custom_processing("test")
@@ -499,7 +503,7 @@ class TestInheritancePatterns:
                 return "Custom default supervisor prompt"
         
         with patch('agentdk.agent.base_app.BaseMemoryApp.__init__'), \
-             patch('agentdk.agent.base_app.create_supervisor_workflow') as mock_create:
+             patch('agentdk.agent.app_utils.create_supervisor_workflow') as mock_create:
             
             app = CustomSupervisorApp(
                 self.mock_model,

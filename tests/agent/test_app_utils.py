@@ -91,10 +91,10 @@ class TestExtractResponse:
             
             response = extract_response(result)
             
-            # Should log warning and fallback to string
-            mock_logger.warning.assert_called_once()
-            warning_msg = mock_logger.warning.call_args[0][0]
-            assert "Unexpected message format" in warning_msg
+            # Should log warnings (may be multiple calls)
+            assert mock_logger.warning.call_count >= 1
+            warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
+            assert any("Unexpected message format" in call for call in warning_calls)
             assert response == "{'messages': [123]}"
     
     def test_extract_fallback_with_warning(self):

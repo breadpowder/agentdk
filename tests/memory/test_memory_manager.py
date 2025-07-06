@@ -5,7 +5,7 @@ the organized test structure that mirrors src/agentdk/memory/.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, MagicMock, patch, AsyncMock
 
 from agentdk.memory.memory_manager import MemoryManager
 
@@ -19,13 +19,28 @@ class TestMemoryManager:
             with patch('agentdk.memory.memory_manager.EpisodicMemory') as mock_episodic:
                 with patch('agentdk.memory.memory_manager.FactualMemory') as mock_factual:
                     
+                    # Mock initialize methods to return coroutines
+                    mock_working_instance = Mock()
+                    mock_working_instance.initialize = AsyncMock()
+                    mock_working.return_value = mock_working_instance
+                    
+                    mock_episodic_instance = Mock()
+                    mock_episodic_instance.initialize = AsyncMock()
+                    mock_episodic.return_value = mock_episodic_instance
+                    
+                    mock_factual_instance = Mock()
+                    mock_factual_instance.initialize = AsyncMock()
+                    mock_factual.return_value = mock_factual_instance
+                    
                     manager = MemoryManager(
                         user_id="test_user",
                         config=mock_memory_config
                     )
                     
                     assert manager.user_id == "test_user"
-                    assert manager.config == mock_memory_config
+                    # Verify that our config values are included (merged with defaults)
+                    for key, value in mock_memory_config.items():
+                        assert manager.config[key] == value
 
     def test_memory_manager_add_interaction(self, mock_memory_manager):
         """Test adding interactions to memory manager."""

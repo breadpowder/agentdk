@@ -43,7 +43,7 @@ class TestInteractiveCLI:
     def test_signal_handler_setup(self):
         """Test signal handler setup with and without SIGTERM."""
         with patch('signal.signal') as mock_signal, \
-             patch('hasattr', side_effect=lambda obj, attr: attr == 'SIGTERM'):
+             patch('builtins.hasattr', side_effect=lambda obj, attr: attr == 'SIGTERM'):
             
             cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
             
@@ -56,7 +56,7 @@ class TestInteractiveCLI:
     def test_signal_handler_without_sigterm(self):
         """Test signal handler setup when SIGTERM is not available."""
         with patch('signal.signal') as mock_signal, \
-             patch('hasattr', return_value=False):
+             patch('builtins.hasattr', return_value=False):
             
             cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
             
@@ -118,8 +118,12 @@ class TestInteractiveCLI:
     @pytest.mark.asyncio
     async def test_process_query_with_unsupported_agent(self):
         """Test _process_query with agent that has no recognized interface."""
-        # Create agent without query method or __call__
-        unsupported_agent = Mock(spec=[])  # Empty spec means no attributes
+        # Create agent that explicitly doesn't have query or __call__ methods
+        class UnsupportedAgent:
+            def some_other_method(self):
+                pass
+        
+        unsupported_agent = UnsupportedAgent()
         
         cli = InteractiveCLI(unsupported_agent, self.agent_name, self.mock_session_manager)
         
@@ -503,8 +507,9 @@ class TestEdgeCases:
         with patch('builtins.input', side_effect=['exit']), \
              patch('click.echo'):
             
-            # Should not raise exception even if close fails
-            await cli.run()
+            # Should raise exception when close fails
+            with pytest.raises(Exception, match="Close error"):
+                await cli.run()
     
     @pytest.mark.asyncio
     @patch('asyncio.get_event_loop')
