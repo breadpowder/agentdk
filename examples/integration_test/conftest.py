@@ -46,23 +46,34 @@ def eda_agent_path():
 @pytest.fixture(scope="function")
 def clean_session_environment():
     """Ensure clean session environment for each test."""
-    # Clear any existing agentdk sessions
-    session_dir = Path.home() / ".agentdk" / "sessions"
-    if session_dir.exists():
-        # Backup existing sessions
-        backup_dir = session_dir.parent / "sessions_backup"
-        if backup_dir.exists():
-            shutil.rmtree(backup_dir)
-        shutil.move(str(session_dir), str(backup_dir))
+    import subprocess
+    
+    # Use agentdk command to clear all sessions before test
+    print("🧹 Clearing all agent sessions before test...")
+    try:
+        result = subprocess.run([
+            "uv", "run", "python", "-m", "agentdk.cli.main", 
+            "sessions", "clear", "--all"
+        ], 
+        capture_output=True, 
+        text=True, 
+        cwd="/home/zineng/workspace/agentic/agentdk",
+        env=os.environ.copy(),
+        timeout=30
+        )
+        if result.returncode == 0:
+            print(f"✅ Sessions cleared: {result.stdout.strip()}")
+        else:
+            print(f"⚠️  Session clear returned code {result.returncode}: {result.stderr}")
+    except subprocess.TimeoutExpired:
+        print("⚠️  Session clear command timed out")
+    except Exception as e:
+        print(f"⚠️  Could not clear sessions before test: {e}")
     
     yield
     
-    # Restore sessions after test
-    if session_dir.exists():
-        shutil.rmtree(session_dir)
-    backup_dir = session_dir.parent / "sessions_backup"
-    if backup_dir.exists():
-        shutil.move(str(backup_dir), str(session_dir))
+    # Note: We don't restore sessions after test to avoid interference
+    # Integration tests should be idempotent and not depend on previous state
 
 
 @pytest.fixture(scope="function")

@@ -30,10 +30,17 @@ switch to agentdk env
 ```bash
 conda activate agentdk
 ```
-Sometimes, you need to run to update env
+
+**Environment Setup (Required for Integration Tests):**
 ```bash
+# Install all dependencies including dev extras (langchain-openai for integration tests)
+uv sync --extra dev
+
+# Alternative: Install in development mode with dev dependencies
 pip install -e .[dev]
 ```
+
+**Note**: Integration tests require `langchain-openai` which is included in the `dev` extras. Always run `uv sync --extra dev` after dependency changes.
 
 ### Testing & Quality
 ```bash
@@ -129,6 +136,9 @@ export OPENAI_API_KEY="your-api-key"
 
 # Optional for extended testing
 export ANTHROPIC_API_KEY="your-anthropic-key"
+
+# Ensure clean test environment (automatically done by test fixtures)
+agentdk sessions clear --all
 ```
 
 **Test Execution Examples**:
