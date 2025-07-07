@@ -400,32 +400,16 @@ class TestSignalHandlerIntegration:
     
     def test_signal_handler_functionality(self):
         """Test signal handler function behavior."""
-        mock_agent = Mock()
-        mock_session_manager = AsyncMock()
+        # Signal handling moved to main.py - test the global handler directly
+        from agentdk.cli.main import signal_handler, shutdown_event
         
-        # Create CLI and extract the signal handler
-        cli = InteractiveCLI(mock_agent, "test_agent", mock_session_manager)
+        # Clear shutdown event first
+        shutdown_event.clear()
+        assert not shutdown_event.is_set()
         
-        # Get the signal handler function that was registered
-        # We need to access it through the mock calls
-        with patch('signal.signal') as mock_signal:
-            # Signal handling moved to main.py - test the global handler instead
-            from agentdk.cli.main import signal_handler, shutdown_event
-            shutdown_event.clear()
-            signal_handler(signal.SIGINT, None)
-            assert shutdown_event.is_set()
-            
-            # Get the signal handler function
-            sigint_call = next(call for call in mock_signal.call_args_list if call[0][0] == signal.SIGINT)
-            signal_handler = sigint_call[0][1]
-            
-            # Test the signal handler
-            signal_handler(signal.SIGINT, None)
-            
-            # Verify behavior
-            mock_echo.assert_called_with("\n\nGracefully shutting down...")
-            mock_exit.assert_called_with(0)
-            assert cli._running is False
+        # Test signal handler
+        signal_handler(signal.SIGINT, None)
+        assert shutdown_event.is_set()
 
 
 class TestEdgeCases:
