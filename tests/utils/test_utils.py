@@ -10,6 +10,7 @@ from agentdk.utils.utils import get_llm
 class TestGetLLM:
     """Test the get_llm function."""
 
+    @pytest.mark.unit
     @pytest.mark.skip(reason="Requires optional langchain_openai dependency")
     def test_openai_llm_creation_success(self):
         """Test successful OpenAI LLM creation."""

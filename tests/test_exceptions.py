@@ -4,6 +4,7 @@ import pytest
 from agentdk.exceptions import AgentDKError, MCPConfigError, AgentInitializationError
 
 
+@pytest.mark.unit
 def test_agentdk_error_basic_creation():
     """Test basic AgentDKError creation and message handling."""
     message = "Test error message"
@@ -14,6 +15,7 @@ def test_agentdk_error_basic_creation():
     assert error.details == {}
 
 
+@pytest.mark.unit
 def test_agentdk_error_with_details():
     """Test AgentDKError creation with details dictionary."""
     message = "Test error with details"
@@ -25,6 +27,7 @@ def test_agentdk_error_with_details():
     assert error.details["key"] == "value"
 
 
+@pytest.mark.unit
 def test_mcp_config_error_creation():
     """Test MCPConfigError creation with config path."""
     message = "Invalid MCP configuration"
@@ -37,6 +40,7 @@ def test_mcp_config_error_creation():
     assert isinstance(error, AgentDKError)
 
 
+@pytest.mark.unit
 def test_agent_initialization_error_creation():
     """Test AgentInitializationError creation with agent type."""
     message = "Failed to initialize agent"
@@ -49,6 +53,7 @@ def test_agent_initialization_error_creation():
     assert isinstance(error, AgentDKError)
 
 
+@pytest.mark.unit
 def test_exception_inheritance_chain():
     """Test that all custom exceptions inherit from AgentDKError properly."""
     # Test inheritance
