@@ -164,7 +164,7 @@ class SubAgentInterface(AgentInterface):
             await self._create_langgraph_agent()
 
             self._initialized = True
-            self.logger.info(
+            self.logger.debug(
                 f"Agent {self.__class__.__name__} initialized successfully"
             )
 
@@ -446,7 +446,7 @@ class SubAgentInterface(AgentInterface):
             wrapped_tools = self._wrap_tools_with_logging(raw_tools)
             self._tools.extend(wrapped_tools)
 
-            self.logger.info(f"Loaded {len(self._tools)} tools from MCP servers")
+            self.logger.debug(f"Loaded {len(self._tools)} tools from MCP servers")
 
         except Exception as e:
             self.logger.error(f"Failed to get tools from MCP client: {e}")
@@ -798,13 +798,13 @@ class SubAgentWithoutMCP(SubAgentInterface):
         try:
             # Skip MCP setup completely - no MCP client or tools from MCP
             # Just use any tools that were provided directly
-            self.logger.info(f"Initializing agent with {len(self._tools)} provided tools")
+            self.logger.debug(f"Initializing agent with {len(self._tools)} provided tools")
             
             # Create LangGraph agent (agent-specific implementation)
             await self._create_langgraph_agent()
 
             self._initialized = True
-            self.logger.info(
+            self.logger.debug(
                 f"Agent {self.__class__.__name__} initialized successfully (no MCP)"
             )
 
