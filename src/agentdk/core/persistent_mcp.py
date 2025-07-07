@@ -437,49 +437,73 @@ class CleanupManager:
             logger.debug(f"Could not register IPython cleanup: {e}")
 
     def _sync_cleanup(self) -> None:
-        """Synchronous cleanup for atexit and signal handlers."""
+        """Synchronous cleanup for atexit and signal handlers with timeout protection."""
         if self._cleanup_in_progress:
             return
 
         self._cleanup_in_progress = True
 
         try:
-            logger.debug("Running synchronous cleanup")
+            logger.debug("Running synchronous cleanup with timeout protection")
 
-            # Try to run async cleanup
+            # Add timeout wrapper for cleanup operations
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Cleanup operation timed out")
+            
+            # Set a reasonable timeout for cleanup (5 seconds)
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(5)
+            
             try:
-                # Check if there's already an event loop running
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is running (like in Jupyter), create a task
-                    asyncio.create_task(self.session_manager.cleanup())
-                else:
-                    # If no loop is running, run the cleanup
-                    loop.run_until_complete(self.session_manager.cleanup())
-            except RuntimeError:
-                # No event loop, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # Try to run async cleanup
                 try:
-                    loop.run_until_complete(self.session_manager.cleanup())
-                finally:
-                    loop.close()
+                    # Check if there's already an event loop running
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # If loop is running (like in Jupyter), create a task
+                        task = asyncio.create_task(self.session_manager.cleanup())
+                        # Don't wait for task in running loop to avoid deadlock
+                        logger.debug("Cleanup task created in running event loop")
+                    else:
+                        # If no loop is running, run the cleanup with timeout
+                        loop.run_until_complete(
+                            asyncio.wait_for(self.session_manager.cleanup(), timeout=4.0)
+                        )
+                except RuntimeError:
+                    # No event loop, create a new one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(self.session_manager.cleanup(), timeout=4.0)
+                        )
+                    finally:
+                        loop.close()
+            finally:
+                # Restore original signal handler
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
 
+        except (TimeoutError, asyncio.TimeoutError) as e:
+            logger.warning(f"MCP session cleanup timed out: {e}")
+            logger.warning("Forcing cleanup completion to prevent hanging")
         except Exception as e:
             logger.warning(f"Warning: MCP session cleanup failed: {e}")
         finally:
             self._cleanup_in_progress = False
 
     def _signal_cleanup(self, signum: int, frame: Any) -> None:
-        """Signal handler cleanup.
+        """Signal handler cleanup with enhanced rapid signal protection.
 
         Args:
             signum: Signal number
             frame: Current stack frame
         """
-        # Avoid spam logging if cleanup is already in progress
+        # Enhanced re-entrancy protection for rapid signals
         if self._cleanup_in_progress:
-            logger.debug(f"Signal {signum} received, but cleanup already in progress")
+            logger.debug(f"Signal {signum} received, but cleanup already in progress - ignoring")
             return
             
         logger.info(f"Received signal {signum}, cleaning up MCP sessions")
@@ -491,6 +515,11 @@ class CleanupManager:
             logger.debug("Shutdown event set for CLI coordination")
         except ImportError:
             logger.debug("CLI main module not available, skipping shutdown event")
+        
+        # Add small delay to allow shutdown event to propagate
+        # This helps the input function detect shutdown before we start cleanup
+        import time
+        time.sleep(0.1)
         
         self._sync_cleanup()
 

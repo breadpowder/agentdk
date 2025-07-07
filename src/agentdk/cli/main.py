@@ -208,10 +208,26 @@ async def run_agent_interactive(agent, resume: bool = False):
                     if query is None:  # Shutdown event was set
                         break
                 else:
-                    # Pipe/file mode - read all input at once
-                    query = sys.stdin.read().strip()
-                    if not query:
-                        break
+                    # Check if there's actually input available for non-TTY
+                    import select
+                    if hasattr(select, 'select'):
+                        # Check if input is immediately available
+                        ready, _, _ = select.select([sys.stdin], [], [], 0.0)
+                        if ready:
+                            # Input is available - read it (pipe/file mode)
+                            query = sys.stdin.read().strip()
+                            if not query:
+                                break
+                        else:
+                            # No input available - treat as interactive mode
+                            query = await get_user_input_async()
+                            if query is None:  # Shutdown event was set
+                                break
+                    else:
+                        # Fallback for systems without select
+                        query = await get_user_input_async()
+                        if query is None:
+                            break
                 
                 if query.lower() in ['exit', 'quit', 'bye']:
                     break
@@ -256,37 +272,43 @@ async def run_agent_interactive(agent, resume: bool = False):
 
 
 async def get_user_input_async():
-    """Get user input asynchronously while checking for shutdown events."""
+    """Get user input asynchronously while checking for shutdown events.
+    
+    Uses non-blocking stdin reading with select() for Unix systems to properly 
+    respond to shutdown events, fixing the input deadlock issue.
+    """
     import sys
+    import select
     
     try:
-        # Use asyncio to run input() in a thread so it doesn't block
-        loop = asyncio.get_event_loop()
+        # Display prompt
+        sys.stdout.write(">>> ")
+        sys.stdout.flush()
         
-        # Create tasks for both input and shutdown event
-        input_task = loop.run_in_executor(None, lambda: input(">>> "))
-        shutdown_task = asyncio.create_task(shutdown_event.wait())
-        
-        # Wait for whichever completes first
-        done, pending = await asyncio.wait(
-            [input_task, shutdown_task], 
-            return_when=asyncio.FIRST_COMPLETED
-        )
-        
-        # Cancel any pending tasks
-        for task in pending:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        
-        # Return result if input completed, None if shutdown
-        if input_task in done:
-            return input_task.result()
-        else:
-            return None
+        # Check if stdin is available for reading without blocking (Unix only)
+        while not shutdown_event.is_set():
+            if sys.stdin.isatty():
+                # Interactive mode - use select to check for input availability
+                ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                if ready:
+                    # Input is available, read it
+                    line = sys.stdin.readline()
+                    if line:
+                        return line.strip()
+                    else:
+                        # EOF encountered
+                        return None
+            else:
+                # Non-interactive mode (pipe/file input) - read all at once
+                content = sys.stdin.read()
+                return content.strip() if content else None
             
+            # Small delay to prevent busy waiting
+            await asyncio.sleep(0.1)
+        
+        # Shutdown event was set
+        return None
+        
     except (KeyboardInterrupt, EOFError):
         return None
 
