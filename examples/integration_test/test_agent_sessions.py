@@ -44,19 +44,27 @@ def test_fresh_agent_session(
     elif "No LLM available" in no_context_result or "LLM is required" in no_context_result:
         pytest.skip("LLM setup failed - environment configuration issue")
     
-    # If agent loaded successfully, verify appropriate responses
-    # The agent should either:
-    # 1. Respond appropriately to queries, or
-    # 2. Show it's working by processing the queries
-    assert len(no_context_result.strip()) > 10, f"Expected meaningful response, got: {no_context_result}"
-    
-    # Verify we got responses to other queries too
+    # Verify appropriate responses using helper functions
     list_tables_result = results[1][1] 
     customer_count_result = results[2][1]
     
-    # Basic validation - if agent is working, it should provide substantive responses
-    assert len(list_tables_result.strip()) > 10, f"Expected meaningful response to list tables, got: {list_tables_result}"
-    assert len(customer_count_result.strip()) > 10, f"Expected meaningful response to customer count, got: {customer_count_result}"
+    # Verify agent loads successfully and provides meaningful responses
+    assert len(no_context_result.strip()) > 10, f"Expected meaningful response, got: {no_context_result}"
+    
+    # Verify list tables response contains expected table names
+    table_keywords = ["tables", "accounts", "customers", "transactions"]
+    assert _verify_output_contains_keywords(list_tables_result, table_keywords), \
+        f"Expected table-related response with keywords {table_keywords}, got: {list_tables_result}"
+    
+    # Verify customer count response contains numeric value
+    customer_numbers = _extract_numeric_values(customer_count_result)
+    assert len(customer_numbers) > 0, f"Expected numeric customer count, got: {customer_count_result}"
+    assert any(num > 0 for num in customer_numbers), f"Expected positive customer count, got: {customer_numbers}"
+    
+    # Verify customer count response contains relevant keywords
+    count_keywords = ["customers", "total", "count"]
+    assert _verify_output_contains_keywords(customer_count_result, count_keywords), \
+        f"Expected customer count response with keywords {count_keywords}, got: {customer_count_result}"
 
 
 @pytest.mark.integration  
@@ -103,12 +111,20 @@ def test_session_resumption(
         result = _run_agent_query(agent_examples_path, query, resume=True)
         results.append((query, result))
     
-    # Basic validation - if agent is working with resume, it should provide responses
+    # Verify session resumption responses using helper functions
     previous_table_result = results[0][1]
     previous_query_result = results[1][1]
     
+    # Basic validation - responses should be meaningful
     assert len(previous_table_result.strip()) > 10, f"Expected meaningful response with --resume, got: {previous_table_result}"
     assert len(previous_query_result.strip()) > 10, f"Expected meaningful response with --resume, got: {previous_query_result}"
+    
+    # Verify memory-related responses contain relevant keywords
+    memory_keywords = ["table", "query", "previous", "accessed", "customers", "accounts"]
+    assert _verify_output_contains_keywords(previous_table_result, memory_keywords), \
+        f"Expected memory-aware response with keywords {memory_keywords}, got: {previous_table_result}"
+    assert _verify_output_contains_keywords(previous_query_result, memory_keywords), \
+        f"Expected memory-aware response with keywords {memory_keywords}, got: {previous_query_result}"
 
 
 @pytest.mark.integration
@@ -150,10 +166,25 @@ def test_memory_learning_correction(
         resume=True
     )
     
-    # Basic validation - agent should provide meaningful responses
+    # Verify memory learning responses using helper functions
     assert len(no_context_result.strip()) > 10, f"Expected meaningful initial response, got: {no_context_result}"
     assert len(case_fail_result.strip()) > 10, f"Expected meaningful response to case sensitive query, got: {case_fail_result}"
     assert len(case_success_result.strip()) > 10, f"Expected meaningful response to subsequent query, got: {case_success_result}"
+    
+    # Verify case-sensitive queries contain relevant keywords
+    account_keywords = ["account", "amount", "average", "max", "saving", "chequing"]
+    assert _verify_output_contains_keywords(case_fail_result, account_keywords), \
+        f"Expected account-related response with keywords {account_keywords}, got: {case_fail_result}"
+    assert _verify_output_contains_keywords(case_success_result, account_keywords), \
+        f"Expected account-related response with keywords {account_keywords}, got: {case_success_result}"
+    
+    # Extract numeric values from account queries (amounts, averages, etc.)
+    case_fail_numbers = _extract_numeric_values(case_fail_result)
+    case_success_numbers = _extract_numeric_values(case_success_result)
+    
+    # At least one query should contain numeric results (amounts, counts, etc.)
+    assert len(case_fail_numbers) > 0 or len(case_success_numbers) > 0, \
+        f"Expected numeric values in account queries. Fail: {case_fail_numbers}, Success: {case_success_numbers}"
 
 
 @pytest.mark.integration
@@ -194,10 +225,25 @@ def test_subagent_functionality(
     list_tables_result = results[1][1]
     customer_count_result = results[2][1]
     
-    # Basic validation - EDA agent should provide meaningful responses
+    # Verify EDA agent responses using helper functions
     assert len(no_context_result.strip()) > 10, f"EDA agent: Expected meaningful response, got: {no_context_result}"
     assert len(list_tables_result.strip()) > 10, f"EDA agent: Expected meaningful response, got: {list_tables_result}"
     assert len(customer_count_result.strip()) > 10, f"EDA agent: Expected meaningful response, got: {customer_count_result}"
+    
+    # Verify EDA agent provides table-related responses
+    table_keywords = ["tables", "accounts", "customers", "transactions"]
+    assert _verify_output_contains_keywords(list_tables_result, table_keywords), \
+        f"EDA agent: Expected table-related response with keywords {table_keywords}, got: {list_tables_result}"
+    
+    # Verify EDA agent provides customer count with numeric values
+    customer_numbers = _extract_numeric_values(customer_count_result)
+    assert len(customer_numbers) > 0, f"EDA agent: Expected numeric customer count, got: {customer_count_result}"
+    assert any(num > 0 for num in customer_numbers), f"EDA agent: Expected positive customer count, got: {customer_numbers}"
+    
+    # Verify EDA agent uses appropriate keywords
+    count_keywords = ["customers", "total", "count"]
+    assert _verify_output_contains_keywords(customer_count_result, count_keywords), \
+        f"EDA agent: Expected customer count response with keywords {count_keywords}, got: {customer_count_result}"
 
 
 def _run_agent_query(agent_path: str, query: str, resume: bool = False) -> str:
