@@ -5,8 +5,12 @@ import os
 import subprocess
 import re
 import time
+import logging
 from pathlib import Path
 from typing import List, Tuple
+
+# Configure logger for integration tests
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.integration
@@ -33,6 +37,7 @@ def test_fresh_agent_session(
     results = []
     for query in queries:
         result = _run_agent_query(agent_examples_path, query, resume=False)
+        logger.info(f"Agent response for query '{query}': {result}")
         results.append((query, result))
     
     # Check that the agent loads successfully (no LLM setup errors)
@@ -90,6 +95,7 @@ def test_session_resumption(
     
     # Run setup queries and check if agent works
     first_result = _run_agent_query(agent_examples_path, setup_queries[0], resume=False)
+    logger.info(f"Initial setup query response: {first_result}")
     
     # Skip if environment issues
     if "langchain_openai not available" in first_result or "LLM is required" in first_result:
@@ -97,7 +103,8 @@ def test_session_resumption(
     
     # Continue with setup if agent is working
     for query in setup_queries[1:]:
-        _run_agent_query(agent_examples_path, query, resume=False)
+        setup_result = _run_agent_query(agent_examples_path, query, resume=False)
+        logger.info(f"Setup query response for '{query}': {setup_result}")
         time.sleep(1)  # Small delay between queries
     
     # Resume session and test memory
@@ -109,6 +116,7 @@ def test_session_resumption(
     results = []
     for query in memory_queries:
         result = _run_agent_query(agent_examples_path, query, resume=True)
+        logger.info(f"Agent response for query '{query}' (resume=True): {result}")
         results.append((query, result))
     
     # Verify session resumption responses using helper functions
@@ -148,6 +156,7 @@ def test_memory_learning_correction(
         integration_test_queries["no_context"], 
         resume=False
     )
+    logger.info(f"No context query response: {no_context_result}")
     
     # Skip if environment issues
     if "langchain_openai not available" in no_context_result or "LLM is required" in no_context_result:
@@ -159,12 +168,14 @@ def test_memory_learning_correction(
         integration_test_queries["case_sensitive_fail"],
         resume=True
     )
+    logger.info(f"Case sensitive fail query response: {case_fail_result}")
     
     case_success_result = _run_agent_query(
         agent_examples_path,
         integration_test_queries["case_sensitive_success"], 
         resume=True
     )
+    logger.info(f"Case sensitive success query response: {case_success_result}")
     
     # Verify memory learning responses using helper functions
     assert len(no_context_result.strip()) > 10, f"Expected meaningful initial response, got: {no_context_result}"
@@ -212,6 +223,7 @@ def test_subagent_functionality(
     results = []
     for query in queries:
         result = _run_agent_query(eda_agent_path, query, resume=False)
+        logger.info(f"EDA agent response for query '{query}': {result}")
         results.append((query, result))
     
     # Verify EDA agent basic functionality
@@ -273,7 +285,7 @@ def _run_agent_query(agent_path: str, query: str, resume: bool = False) -> str:
             stderr=subprocess.PIPE,
             text=True,
             env=env,  # Pass environment variables
-            cwd="/home/zineng/workspace/agentic/agentdk"
+            cwd=Path(__file__).parent.parent.parent  # Navigate to repository root
         )
         
         stdout, stderr = process.communicate(input=query, timeout=60)

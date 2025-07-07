@@ -57,7 +57,7 @@ def clean_session_environment():
         ], 
         capture_output=True, 
         text=True, 
-        cwd="/home/zineng/workspace/agentic/agentdk",
+        cwd=Path(__file__).parent.parent.parent,  # Navigate to repository root
         env=os.environ.copy(),
         timeout=30
         )
