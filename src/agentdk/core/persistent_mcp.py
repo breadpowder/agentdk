@@ -73,7 +73,7 @@ class _PersistentSessionContext:
                 # Continue anyway - some servers might not support list_tools immediately
             
             self._is_active = True
-            logger.info(f"Persistent session created for server: {self.server_name}")
+            logger.debug(f"Persistent session created for server: {self.server_name}")
 
         except Exception as e:
             logger.error(
@@ -105,7 +105,7 @@ class _PersistentSessionContext:
             self.session = None
             self._context_manager = None
             self._is_active = False
-            logger.info(f"Persistent session cleaned up for server: {self.server_name}")
+            logger.debug(f"Persistent session cleaned up for server: {self.server_name}")
 
     async def _cleanup_on_error(self) -> None:
         """Clean up resources after an error during session creation."""
@@ -168,7 +168,7 @@ class PersistentSessionManager:
             logger.debug("Persistent session manager already initialized")
             return
 
-        logger.info("Initializing persistent MCP sessions")
+        logger.debug("Initializing persistent MCP sessions")
 
         failed_servers = []
 
@@ -246,7 +246,7 @@ class PersistentSessionManager:
                 )
                 # Continue with other servers
 
-        logger.info(f"Created total {len(all_tools)} persistent tools")
+        logger.debug(f"Created total {len(all_tools)} persistent tools")
         return all_tools
 
     def _create_persistent_tool(
@@ -347,7 +347,7 @@ class PersistentSessionManager:
         if not self._initialized:
             return
 
-        logger.info("Cleaning up persistent MCP sessions")
+        logger.debug("Cleaning up persistent MCP sessions")
 
         cleanup_tasks = []
         for server_name, session_context in self._session_contexts.items():
@@ -360,7 +360,7 @@ class PersistentSessionManager:
         self._session_contexts.clear()
         self._initialized = False
 
-        logger.info("All persistent MCP sessions cleaned up")
+        logger.debug("All persistent MCP sessions cleaned up")
 
     @property
     def is_initialized(self) -> bool:
@@ -419,7 +419,7 @@ class CleanupManager:
         self._register_ipython_cleanup()
 
         self._cleanup_registered = True
-        logger.info("Cleanup handlers registered successfully")
+        logger.debug("Cleanup handlers registered successfully")
 
     def _register_ipython_cleanup(self) -> None:
         """Register cleanup for IPython/Jupyter environments."""

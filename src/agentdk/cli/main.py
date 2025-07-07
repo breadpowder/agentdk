@@ -17,6 +17,123 @@ logger = get_logger(__name__)
 # Global shutdown event for coordinating signal handling with async code
 shutdown_event = asyncio.Event()
 
+
+class GlobalCLIHistory:
+    """Manages global CLI command history across all agent sessions."""
+    
+    def __init__(self, max_size: int = 10):
+        """Initialize global CLI history manager.
+        
+        Args:
+            max_size: Maximum number of commands to keep in history
+        """
+        self.max_size = max_size
+        self.history_file = Path.home() / ".agentdk" / "cli_history.txt"
+        self.commands = self.load_and_cleanup()
+        self.current_index = len(self.commands)
+        logger.debug(f"Initialized global CLI history with {len(self.commands)} commands")
+    
+    def load_and_cleanup(self) -> list:
+        """Load existing history and trim to max size.
+        
+        Returns:
+            List of recent commands
+        """
+        if not self.history_file.exists():
+            # Create directory if needed
+            self.history_file.parent.mkdir(parents=True, exist_ok=True)
+            return []
+        
+        try:
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                all_commands = [line.strip() for line in f if line.strip()]
+            
+            # Keep only last max_size commands
+            recent_commands = all_commands[-self.max_size:]
+            
+            # Immediately rewrite file with cleaned history
+            self.save_commands(recent_commands)
+            
+            logger.debug(f"Loaded and cleaned history: {len(recent_commands)} commands")
+            return recent_commands
+            
+        except (IOError, OSError) as e:
+            logger.debug(f"Could not load history file: {e}")
+            return []
+    
+    def add_command(self, command: str) -> None:
+        """Add a command to history.
+        
+        Args:
+            command: Command to add to history
+        """
+        if not command or not command.strip():
+            return
+        
+        command = command.strip()
+        
+        # Avoid duplicate consecutive commands
+        if self.commands and self.commands[-1] == command:
+            return
+        
+        # Add command and maintain max size
+        self.commands.append(command)
+        if len(self.commands) > self.max_size:
+            self.commands.pop(0)  # Remove oldest
+        
+        # Reset index to end of history
+        self.current_index = len(self.commands)
+        
+        logger.debug(f"Added command to history: {command}")
+    
+    def get_previous(self) -> Optional[str]:
+        """Get previous command in history.
+        
+        Returns:
+            Previous command or None if at beginning
+        """
+        if not self.commands or self.current_index <= 0:
+            return None
+        
+        self.current_index -= 1
+        return self.commands[self.current_index]
+    
+    def get_next(self) -> Optional[str]:
+        """Get next command in history.
+        
+        Returns:
+            Next command or None if at end
+        """
+        if not self.commands or self.current_index >= len(self.commands) - 1:
+            return None
+        
+        self.current_index += 1
+        return self.commands[self.current_index]
+    
+    def save_commands(self, commands: list = None) -> None:
+        """Save commands to history file.
+        
+        Args:
+            commands: List of commands to save (defaults to current commands)
+        """
+        if commands is None:
+            commands = self.commands
+        
+        try:
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                if commands:
+                    f.write('\n'.join(commands) + '\n')
+            
+            logger.debug(f"Saved {len(commands)} commands to history file")
+            
+        except (IOError, OSError) as e:
+            logger.debug(f"Could not save history file: {e}")
+    
+    def save(self) -> None:
+        """Save current history to file."""
+        self.save_commands()
+
+
 def signal_handler(signum, frame):
     """Handle interrupt signals gracefully by setting shutdown event."""
     logger.info("Received interrupt signal, initiating graceful shutdown...")
@@ -166,6 +283,9 @@ async def run_agent_interactive(agent, resume: bool = False):
     if agent_name == 'type':
         agent_name = 'agent'  # fallback for unnamed agents
     
+    # Setup global CLI history
+    history_manager = GlobalCLIHistory()
+    
     # Initialize session manager for CLI-loaded agents
     session_manager = SessionManager(agent_name)
     
@@ -201,36 +321,16 @@ async def run_agent_interactive(agent, resume: bool = False):
         # Interactive loop with shutdown event coordination
         while not shutdown_event.is_set():
             try:
-                # Check for shutdown event while getting input
-                if sys.stdin.isatty():
-                    # Interactive mode - use non-blocking input check
-                    query = await get_user_input_async()
-                    if query is None:  # Shutdown event was set
-                        break
-                else:
-                    # Check if there's actually input available for non-TTY
-                    import select
-                    if hasattr(select, 'select'):
-                        # Check if input is immediately available
-                        ready, _, _ = select.select([sys.stdin], [], [], 0.0)
-                        if ready:
-                            # Input is available - read it (pipe/file mode)
-                            query = sys.stdin.read().strip()
-                            if not query:
-                                break
-                        else:
-                            # No input available - treat as interactive mode
-                            query = await get_user_input_async()
-                            if query is None:  # Shutdown event was set
-                                break
-                    else:
-                        # Fallback for systems without select
-                        query = await get_user_input_async()
-                        if query is None:
-                            break
+                # Get user input with history navigation support
+                query = await get_user_input_with_history(history_manager)
+                if query is None:  # Shutdown event was set or EOF
+                    break
                 
                 if query.lower() in ['exit', 'quit', 'bye']:
                     break
+                
+                # Add command to history
+                history_manager.add_command(query)
                 
                 # Check shutdown event before processing
                 if shutdown_event.is_set():
@@ -263,20 +363,139 @@ async def run_agent_interactive(agent, resume: bool = False):
                 break
         
         # Graceful cleanup
-        await cleanup_and_exit(session_manager)
+        await cleanup_and_exit(session_manager, history_manager)
                 
     except Exception as e:
         logger.error(f"Interactive mode error: {e}")
-        await cleanup_and_exit(session_manager)
+        await cleanup_and_exit(session_manager, history_manager)
         sys.exit(1)
 
 
-async def get_user_input_async():
-    """Get user input asynchronously while checking for shutdown events.
+async def get_user_input_with_history(history_manager: GlobalCLIHistory):
+    """Get user input with arrow key history navigation.
     
-    Uses non-blocking stdin reading with select() for Unix systems to properly 
-    respond to shutdown events, fixing the input deadlock issue.
+    Args:
+        history_manager: Global CLI history manager
+        
+    Returns:
+        User input string or None if shutdown requested
     """
+    import sys
+    import select
+    import termios
+    import tty
+    
+    try:
+        if not sys.stdin.isatty():
+            # Non-interactive mode (pipe/file input) - read all at once
+            content = sys.stdin.read()
+            return content.strip() if content else None
+        
+        # Interactive mode with arrow key support
+        sys.stdout.write(">>> ")
+        sys.stdout.flush()
+        
+        # Set up terminal for character-by-character input
+        old_settings = termios.tcgetattr(sys.stdin)
+        tty.setraw(sys.stdin)
+        
+        current_line = ""
+        cursor_pos = 0
+        temp_index = len(history_manager.commands)  # Start at end of history
+        
+        try:
+            while not shutdown_event.is_set():
+                # Check for input availability
+                ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                if not ready:
+                    await asyncio.sleep(0.01)
+                    continue
+                
+                char = sys.stdin.read(1)
+                
+                if char == '\x03':  # Ctrl+C
+                    return None
+                elif char == '\x04':  # Ctrl+D (EOF)
+                    return None
+                elif char == '\r' or char == '\n':  # Enter
+                    sys.stdout.write('\n')
+                    sys.stdout.flush()
+                    return current_line
+                elif char == '\x7f' or char == '\x08':  # Backspace
+                    if cursor_pos > 0:
+                        current_line = current_line[:cursor_pos-1] + current_line[cursor_pos:]
+                        cursor_pos -= 1
+                        # Redraw line
+                        sys.stdout.write('\r>>> ' + current_line + ' ')
+                        sys.stdout.write('\r>>> ' + current_line)
+                        if cursor_pos < len(current_line):
+                            sys.stdout.write('\b' * (len(current_line) - cursor_pos))
+                        sys.stdout.flush()
+                elif char == '\x1b':  # Escape sequence (arrow keys)
+                    # Read the next two characters for arrow key detection
+                    next_chars = sys.stdin.read(2)
+                    if next_chars == '[A':  # Up arrow
+                        temp_index -= 1
+                        if temp_index >= 0 and temp_index < len(history_manager.commands):
+                            current_line = history_manager.commands[temp_index]
+                            cursor_pos = len(current_line)
+                            # Redraw line
+                            sys.stdout.write('\r>>> ' + ' ' * 50)  # Clear line
+                            sys.stdout.write('\r>>> ' + current_line)
+                            sys.stdout.flush()
+                        else:
+                            temp_index = max(-1, temp_index)
+                    elif next_chars == '[B':  # Down arrow
+                        temp_index += 1
+                        if temp_index < len(history_manager.commands):
+                            current_line = history_manager.commands[temp_index]
+                            cursor_pos = len(current_line)
+                        else:
+                            temp_index = len(history_manager.commands)
+                            current_line = ""
+                            cursor_pos = 0
+                        # Redraw line
+                        sys.stdout.write('\r>>> ' + ' ' * 50)  # Clear line
+                        sys.stdout.write('\r>>> ' + current_line)
+                        sys.stdout.flush()
+                    elif next_chars == '[C':  # Right arrow
+                        if cursor_pos < len(current_line):
+                            cursor_pos += 1
+                            sys.stdout.write('\x1b[C')
+                            sys.stdout.flush()
+                    elif next_chars == '[D':  # Left arrow
+                        if cursor_pos > 0:
+                            cursor_pos -= 1
+                            sys.stdout.write('\x1b[D')
+                            sys.stdout.flush()
+                elif ord(char) >= 32:  # Printable character
+                    current_line = current_line[:cursor_pos] + char + current_line[cursor_pos:]
+                    cursor_pos += 1
+                    # Redraw from cursor position
+                    sys.stdout.write(char)
+                    if cursor_pos < len(current_line):
+                        remainder = current_line[cursor_pos:]
+                        sys.stdout.write(remainder)
+                        sys.stdout.write('\b' * len(remainder))
+                    sys.stdout.flush()
+                
+                await asyncio.sleep(0.001)  # Small delay to prevent busy waiting
+        
+        finally:
+            # Restore terminal settings
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+        
+        return None  # Shutdown event was set
+        
+    except (KeyboardInterrupt, EOFError):
+        return None
+    except ImportError:
+        # termios not available (Windows), fall back to basic input
+        return await get_user_input_basic()
+
+
+async def get_user_input_basic():
+    """Basic user input fallback for systems without termios."""
     import sys
     import select
     
@@ -285,7 +504,7 @@ async def get_user_input_async():
         sys.stdout.write(">>> ")
         sys.stdout.flush()
         
-        # Check if stdin is available for reading without blocking (Unix only)
+        # Check if stdin is available for reading without blocking
         while not shutdown_event.is_set():
             if sys.stdin.isatty():
                 # Interactive mode - use select to check for input availability
@@ -313,11 +532,15 @@ async def get_user_input_async():
         return None
 
 
-async def cleanup_and_exit(session_manager):
+async def cleanup_and_exit(session_manager, history_manager: GlobalCLIHistory = None):
     """Perform graceful cleanup before exit."""
     try:
         logger.info("Performing graceful shutdown...")
         print("\nGracefully shutting down...")
+        
+        # Save global CLI history
+        if history_manager:
+            history_manager.save()
         
         # Save session state
         await session_manager.close()
