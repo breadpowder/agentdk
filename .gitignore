@@ -208,6 +208,12 @@ Thumbs.db
 *.media
 examples/mysql_mcp_server/
 
+# Debugging and testing files (project root)
+test_*.py
+debug_*.py
+reproduce_*.py
+temp_issue.txt
+
 # Development and internal files (keep local only)
 memory-bank/
 scripts/

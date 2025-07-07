@@ -36,9 +36,7 @@ class TestInteractiveCLI:
         assert cli.agent_name == self.agent_name
         assert cli.session_manager == self.mock_session_manager
         assert cli._running is True
-        
-        # Verify signal handlers were set up (should be called at least once)
-        assert self.mock_signal.call_count >= 1
+        # Signal handlers are now managed globally in main.py
     
     def test_signal_handler_setup(self):
         """Test signal handler setup with and without SIGTERM."""
@@ -47,24 +45,18 @@ class TestInteractiveCLI:
             
             cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
             
-            # Should register both SIGINT and SIGTERM
-            assert mock_signal.call_count >= 1  # At least SIGINT should be registered
-            # Check if SIGINT was registered
-            signal_calls = [call[0][0] for call in mock_signal.call_args_list if len(call[0]) > 0]
-            assert signal.SIGINT in signal_calls
+            # Signal handling is now managed globally in main.py, not in InteractiveCLI
+            # InteractiveCLI no longer sets up its own signal handlers
+            assert cli._running is True
     
     def test_signal_handler_without_sigterm(self):
-        """Test signal handler setup when SIGTERM is not available."""
-        with patch('signal.signal') as mock_signal, \
-             patch('builtins.hasattr', return_value=False):
-            
-            cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
-            
-            # Should register SIGINT at least
-            assert mock_signal.call_count >= 1
-            # Verify SIGINT was registered
-            signal_calls = [call[0][0] for call in mock_signal.call_args_list if len(call[0]) > 0]
-            assert signal.SIGINT in signal_calls
+        """Test that InteractiveCLI doesn't handle SIGTERM directly."""
+        # Signal handling is now managed globally in main.py
+        # This test verifies that InteractiveCLI doesn't manage signals directly
+        cli = InteractiveCLI(self.mock_agent, self.agent_name, self.mock_session_manager)
+        
+        # InteractiveCLI should not have signal handling logic
+        assert cli._running is True
     
     @pytest.mark.asyncio
     async def test_invoke_async_with_async_function(self):
@@ -406,32 +398,18 @@ class TestRunInteractiveSession:
 class TestSignalHandlerIntegration:
     """Test signal handler integration and behavior."""
     
-    @patch('sys.exit')
-    @patch('click.echo')
-    def test_signal_handler_functionality(self, mock_echo, mock_exit):
+    def test_signal_handler_functionality(self):
         """Test signal handler function behavior."""
-        mock_agent = Mock()
-        mock_session_manager = AsyncMock()
+        # Signal handling moved to main.py - test the global handler directly
+        from agentdk.cli.main import signal_handler, shutdown_event
         
-        # Create CLI and extract the signal handler
-        cli = InteractiveCLI(mock_agent, "test_agent", mock_session_manager)
+        # Clear shutdown event first
+        shutdown_event.clear()
+        assert not shutdown_event.is_set()
         
-        # Get the signal handler function that was registered
-        # We need to access it through the mock calls
-        with patch('signal.signal') as mock_signal:
-            cli._setup_signal_handlers()
-            
-            # Get the signal handler function
-            sigint_call = next(call for call in mock_signal.call_args_list if call[0][0] == signal.SIGINT)
-            signal_handler = sigint_call[0][1]
-            
-            # Test the signal handler
-            signal_handler(signal.SIGINT, None)
-            
-            # Verify behavior
-            mock_echo.assert_called_with("\n\nGracefully shutting down...")
-            mock_exit.assert_called_with(0)
-            assert cli._running is False
+        # Test signal handler
+        signal_handler(signal.SIGINT, None)
+        assert shutdown_event.is_set()
 
 
 class TestEdgeCases:

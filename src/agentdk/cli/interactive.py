@@ -18,19 +18,7 @@ class InteractiveCLI:
         self.agent_name = agent_name
         self.session_manager = session_manager
         self._running = True
-        self._setup_signal_handlers()
-    
-    def _setup_signal_handlers(self):
-        """Setup graceful shutdown on Ctrl+C."""
-        def signal_handler(signum, frame):
-            click.echo("\n\nGracefully shutting down...")
-            self._running = False
-            # Exit immediately on Ctrl+C to avoid hanging on input()
-            sys.exit(0)
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        if hasattr(signal, 'SIGTERM'):
-            signal.signal(signal.SIGTERM, signal_handler)
+        # Signal handlers are now managed globally in main.py
     
     async def run(self):
         """Run the interactive REPL loop."""

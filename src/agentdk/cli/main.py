@@ -14,11 +14,20 @@ from agentdk.core.logging_config import get_logger, set_log_level
 
 logger = get_logger(__name__)
 
+# Global shutdown event for coordinating signal handling with async code
+shutdown_event = asyncio.Event()
 
 def signal_handler(signum, frame):
-    """Handle interrupt signals gracefully."""
-    logger.info("Received interrupt signal, shutting down...")
-    sys.exit(0)
+    """Handle interrupt signals gracefully by setting shutdown event."""
+    logger.info("Received interrupt signal, initiating graceful shutdown...")
+    # Use set_result on a future to signal from sync context to async context
+    try:
+        # Try to set the event if there's an active loop
+        loop = asyncio.get_running_loop()
+        loop.call_soon_threadsafe(shutdown_event.set)
+    except RuntimeError:
+        # No active loop, set the event directly
+        shutdown_event.set()
 
 
 def setup_dynamic_path(agent_file: Path):
@@ -147,6 +156,9 @@ async def run_agent_interactive(agent, resume: bool = False):
     import sys
     from ..agent.session_manager import SessionManager
     
+    # Clear any previous shutdown state
+    shutdown_event.clear()
+    
     logger.info("Starting interactive mode (Ctrl+C to exit)")
     
     # Get agent name for session management
@@ -186,18 +198,42 @@ async def run_agent_interactive(agent, resume: bool = False):
                 except Exception as e:
                     logger.warning(f"Could not clear agent memory: {e}")
         
-        # Interactive loop
-        while True:
+        # Interactive loop with shutdown event coordination
+        while not shutdown_event.is_set():
             try:
-                # Read from stdin or prompt
+                # Check for shutdown event while getting input
                 if sys.stdin.isatty():
-                    query = input(">>> ")
-                else:
-                    query = sys.stdin.read().strip()
-                    if not query:
+                    # Interactive mode - use non-blocking input check
+                    query = await get_user_input_async()
+                    if query is None:  # Shutdown event was set
                         break
+                else:
+                    # Check if there's actually input available for non-TTY
+                    import select
+                    if hasattr(select, 'select'):
+                        # Check if input is immediately available
+                        ready, _, _ = select.select([sys.stdin], [], [], 0.0)
+                        if ready:
+                            # Input is available - read it (pipe/file mode)
+                            query = sys.stdin.read().strip()
+                            if not query:
+                                break
+                        else:
+                            # No input available - treat as interactive mode
+                            query = await get_user_input_async()
+                            if query is None:  # Shutdown event was set
+                                break
+                    else:
+                        # Fallback for systems without select
+                        query = await get_user_input_async()
+                        if query is None:
+                            break
                 
                 if query.lower() in ['exit', 'quit', 'bye']:
+                    break
+                
+                # Check shutdown event before processing
+                if shutdown_event.is_set():
                     break
                 
                 # Process query
@@ -226,12 +262,73 @@ async def run_agent_interactive(agent, resume: bool = False):
                 print("\\nGoodbye!")
                 break
         
-        # Close session
-        await session_manager.close()
+        # Graceful cleanup
+        await cleanup_and_exit(session_manager)
                 
     except Exception as e:
         logger.error(f"Interactive mode error: {e}")
+        await cleanup_and_exit(session_manager)
         sys.exit(1)
+
+
+async def get_user_input_async():
+    """Get user input asynchronously while checking for shutdown events.
+    
+    Uses non-blocking stdin reading with select() for Unix systems to properly 
+    respond to shutdown events, fixing the input deadlock issue.
+    """
+    import sys
+    import select
+    
+    try:
+        # Display prompt
+        sys.stdout.write(">>> ")
+        sys.stdout.flush()
+        
+        # Check if stdin is available for reading without blocking (Unix only)
+        while not shutdown_event.is_set():
+            if sys.stdin.isatty():
+                # Interactive mode - use select to check for input availability
+                ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                if ready:
+                    # Input is available, read it
+                    line = sys.stdin.readline()
+                    if line:
+                        return line.strip()
+                    else:
+                        # EOF encountered
+                        return None
+            else:
+                # Non-interactive mode (pipe/file input) - read all at once
+                content = sys.stdin.read()
+                return content.strip() if content else None
+            
+            # Small delay to prevent busy waiting
+            await asyncio.sleep(0.1)
+        
+        # Shutdown event was set
+        return None
+        
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
+async def cleanup_and_exit(session_manager):
+    """Perform graceful cleanup before exit."""
+    try:
+        logger.info("Performing graceful shutdown...")
+        print("\nGracefully shutting down...")
+        
+        # Save session state
+        await session_manager.close()
+        logger.info("Session state saved successfully")
+        
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+    
+    logger.info("Shutdown complete")
+    # Actually exit the process
+    sys.exit(0)
 
 
 async def handle_sessions_command(args):
@@ -316,9 +413,8 @@ async def handle_sessions_command(args):
 
 def main():
     """Main CLI entry point."""
-    # Set up signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Note: Signal handlers are managed by the MCP system in persistent_mcp.py
+    # We coordinate with shutdown_event which gets set by the MCP signal handler
     
     parser = argparse.ArgumentParser(
         description="AgentDK CLI - Run intelligent agents",
