@@ -245,7 +245,7 @@ def create_agent_instance(agent_cls_or_func, agent_file: Path, **kwargs):
         try:
             from agentdk.utils.utils import get_llm
             kwargs['llm'] = get_llm()
-            logger.info("Using default LLM for agent")
+            logger.debug("Using default LLM for agent")
         except Exception as e:
             logger.warning(f"No LLM available: {e}")
             logger.warning("Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable")
@@ -304,7 +304,7 @@ async def run_agent_interactive(agent, resume: bool = False):
                     else:
                         logger.warning("Failed to restore agent memory from session")
         else:
-            logger.info("Starting with fresh memory")
+            logger.debug("Starting with fresh memory")
             await session_manager.start_new_session()
             
             # Clear agent memory if supported

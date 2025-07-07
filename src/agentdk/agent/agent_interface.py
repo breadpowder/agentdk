@@ -410,7 +410,7 @@ class SubAgentInterface(AgentInterface):
             # Create MCP adapter/client
             self._mcp_client = MultiServerMCPClient(client_config)
 
-            self.logger.info(f"MCP client configured with {len(client_config)} servers")
+            self.logger.debug(f"MCP client configured with {len(client_config)} servers")
 
             # Create persistent session manager
             self._persistent_session_manager = PersistentSessionManager(
@@ -424,7 +424,7 @@ class SubAgentInterface(AgentInterface):
             self._cleanup_manager = CleanupManager(self._persistent_session_manager)
             self._cleanup_manager.register_cleanup()
 
-            self.logger.info(
+            self.logger.debug(
                 f"Persistent session manager initialized with {self._persistent_session_manager.active_session_count} active sessions"
             )
 

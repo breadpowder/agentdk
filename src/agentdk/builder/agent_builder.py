@@ -213,7 +213,7 @@ class AgentBuilder:
                     # Create react agent with LLM and tools
                     self.agent = create_react_agent(self.llm, self._tools)
                     
-                    self.logger.info(f"Created LangGraph agent with {len(self._tools)} tools")
+                    self.logger.debug(f"Created LangGraph agent with {len(self._tools)} tools")
                     
                 except ImportError as e:
                     self.logger.error(f"Failed to import LangGraph: {e}")
