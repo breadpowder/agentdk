@@ -1,3 +1,0 @@
-This is a dummy file to test write access to the repository.
-Created on: 2025-07-10
-Purpose: Verify git push permissions
