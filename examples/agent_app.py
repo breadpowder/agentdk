@@ -40,7 +40,7 @@ class App(BaseMemoryApp):
 
     def __init__(
         self, 
-        model: Any, 
+        llm: Any,
         memory: bool = True,
         user_id: str = "default",
         memory_config: Optional[Dict[str, Any]] = None,
@@ -49,14 +49,20 @@ class App(BaseMemoryApp):
         """Initialize Agent with optional memory integration.
         
         Args:
-            model: Language model instance
+            llm: Language model instance
             memory: Whether to enable memory system
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
             resume_session: Whether to resume from previous session (None = no session management)
         """
-        # Initialize with base class (which handles model, memory, and workflow creation)
-        super().__init__(model=model, memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session)
+        # Store LLM for workflow creation
+        self.llm = llm
+        
+        # Initialize with base class (which handles memory and workflow creation)
+        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session)
+        
+        # Create workflow using LLM
+        self.app = self.create_workflow(llm)
     
 
     def create_workflow(self, model: Any) -> Any:
@@ -140,4 +146,27 @@ class App(BaseMemoryApp):
         
         # Add memory awareness
         return self.get_memory_aware_prompt(base_prompt)
+    
+    def _get_default_prompt(self) -> str:
+        """Get the default system prompt for this supervisor app.
+        
+        Returns:
+            Default supervisor system prompt
+        """
+        return """You are a team supervisor managing a research expert and an EDA agent.
+        
+        CRITICAL ROUTING RULES:
+        
+        Use 'eda_agent' for ANY question about:
+        - Database tables, table access, table information
+        - SQL queries, data exploration, data analysis
+        - Exploratory data analysis (EDA)
+        - Financial data analysis
+        
+        Use 'research_expert' for:
+        - Current events, news, web search
+        - General information not in the database
+        - Company information not stored in database
+        
+        When in doubt about data-related questions, ALWAYS choose eda_agent."""
 

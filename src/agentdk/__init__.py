@@ -16,7 +16,8 @@ Examples:
     
 """
 
-from .agent.agent_interface import AgentInterface, SubAgentInterface
+from .agent.agent_interface import AgentInterface, SubAgent
+from .agent.root_agent import RootAgent, SupervisorAgent
 from .agent.factory import create_agent, AgentConfig
 from .builder.agent_builder import Agent
 from .exceptions import AgentDKError, MCPConfigError, AgentInitializationError
@@ -28,7 +29,9 @@ __version__ = "0.1.0"
 __all__ = [
     # Core interfaces
     "AgentInterface",
-    "SubAgentInterface",
+    "SubAgent",
+    "RootAgent",
+    "SupervisorAgent",
     
     # Agent creation
     "Agent",  # New builder pattern factory

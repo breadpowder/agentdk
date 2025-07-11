@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, List, Union, Callable
 from pathlib import Path
 import inspect
 
-from ..agent.agent_interface import SubAgentInterface
+from ..agent.agent_interface import SubAgent
 from ..core.logging_config import get_logger
 
 
@@ -97,11 +97,27 @@ class AgentBuilder:
         self._config['resume_session'] = resume_session
         return self
 
-    def build(self) -> SubAgentInterface:
+    def with_memory(self, enable: bool = True, user_id: str = "default", config: Optional[Dict[str, Any]] = None) -> 'AgentBuilder':
+        """Set memory configuration for the agent.
+        
+        Args:
+            enable: Whether to enable memory system (default: True)
+            user_id: User identifier for scoped memory (default: "default")
+            config: Optional memory configuration dictionary
+            
+        Returns:
+            Self for method chaining
+        """
+        self._config['enable_memory'] = enable
+        self._config['memory_user_id'] = user_id
+        self._config['memory_config'] = config
+        return self
+
+    def build(self) -> SubAgent:
         """Build the agent using generic implementation.
         
         Returns:
-            Configured agent that implements SubAgentInterface
+            Configured agent that implements SubAgent with memory capabilities
             
         Raises:
             ValueError: If required configuration is missing or invalid
@@ -168,30 +184,33 @@ class AgentBuilder:
         # Fallback: convert to string
         return str(prompt_input)
 
-    def _create_generic_agent(self, resolved_prompt: str) -> SubAgentInterface:
+    def _create_generic_agent(self, resolved_prompt: str) -> SubAgent:
         """Create a generic agent that implements all required abstract methods.
         
         Args:
             resolved_prompt: The resolved system prompt string
             
         Returns:
-            Generic agent instance
+            Generic agent instance with memory capabilities
         """
         config = self._config.copy()
         config['resolved_prompt'] = resolved_prompt
 
-        class GenericAgent(SubAgentInterface):
+        class GenericAgent(SubAgent):
             """Generic agent implementation that handles all boilerplate."""
 
             def __init__(self, builder_config: Dict[str, Any]):
                 """Initialize generic agent with builder configuration."""
-                # Extract parameters for SubAgentInterface
+                # Extract parameters for SubAgent (now memory-aware)
                 init_kwargs = {
                     'llm': builder_config.get('llm'),
                     'prompt': builder_config.get('resolved_prompt'),
                     'name': builder_config.get('name', 'generic_agent'),
                     'tools': builder_config.get('tools', []),
-                    'resume_session': builder_config.get('resume_session')
+                    'enable_memory': builder_config.get('enable_memory', True),
+                    'resume_session': builder_config.get('resume_session'),
+                    'user_id': builder_config.get('memory_user_id', 'default'),
+                    'memory_config': builder_config.get('memory_config')
                 }
                 
                 # Add MCP config if provided
@@ -204,6 +223,30 @@ class AgentBuilder:
             def _get_default_prompt(self) -> str:
                 """Return the resolved prompt from builder."""
                 return self._builder_config['resolved_prompt']
+
+            def __call__(self, query: str) -> str:
+                """Process a query and return a response."""
+                # Use memory-aware processing from parent class
+                enhanced_input = self.process_with_memory(query)
+                
+                # Simple processing - just return a basic response
+                # In a real implementation, this would use the LangGraph agent
+                agent_name = self._builder_config.get('name', 'agent')
+                
+                # Basic response with memory context if available
+                memory_context = enhanced_input.get('memory_context')
+                if memory_context:
+                    result = f"Hello! I'm {agent_name}. I have access to our conversation history and will use it to provide better responses. You asked: {query}"
+                else:
+                    result = f"Hello! I'm {agent_name}. You asked: {query}"
+                
+                # Finalize with memory
+                return self.finalize_with_memory(query, result)
+
+            def create_workflow(self):
+                """Create simple workflow for generic agent."""
+                # Return None for simple agents, workflow creation happens in _create_langgraph_agent
+                return None
 
             async def _create_langgraph_agent(self) -> None:
                 """Create LangGraph reactive agent with available tools."""

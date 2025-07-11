@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, Union, Type
 from pathlib import Path
 import inspect
 
-from .agent_interface import SubAgentInterface
+from .agent_interface import SubAgent
 from ..core.logging_config import get_logger
 from ..exceptions import AgentInitializationError
 
@@ -45,7 +45,7 @@ def create_agent(
     config: Optional[AgentConfig] = None,
     llm: Optional[Any] = None,
     **kwargs: Any
-) -> SubAgentInterface:
+) -> SubAgent:
     """Create an agent of the specified type.
     
     Args:
@@ -105,7 +105,7 @@ def create_agent(
 
 
 
-def _get_agent_class(agent_type: str) -> Type[SubAgentInterface]:
+def _get_agent_class(agent_type: str) -> Type[SubAgent]:
     """Get the agent class for the specified type.
     
     Args:
@@ -134,7 +134,7 @@ def _get_agent_class(agent_type: str) -> Type[SubAgentInterface]:
 
 
 
-def _get_custom_agent_class() -> Type[SubAgentInterface]:
+def _get_custom_agent_class() -> Type[SubAgent]:
     """Get a custom agent class.
     
     Returns:
@@ -145,7 +145,7 @@ def _get_custom_agent_class() -> Type[SubAgentInterface]:
 
 
 
-def _create_basic_agent_class(class_name: str) -> Type[SubAgentInterface]:
+def _create_basic_agent_class(class_name: str) -> Type[SubAgent]:
     """Create a basic agent class with the given name.
     
     Args:
@@ -154,7 +154,7 @@ def _create_basic_agent_class(class_name: str) -> Type[SubAgentInterface]:
     Returns:
         Basic agent class
     """
-    class BasicAgent(SubAgentInterface):
+    class BasicAgent(SubAgent):
         """Basic agent implementation."""
         
         def __init__(self, config: Optional[AgentConfig] = None, **kwargs: Any) -> None:
@@ -190,9 +190,9 @@ def _create_basic_agent_class(class_name: str) -> Type[SubAgentInterface]:
 
 
 def _instantiate_agent(
-    agent_class: Type[SubAgentInterface], 
+    agent_class: Type[SubAgent], 
     config: AgentConfig
-) -> SubAgentInterface:
+) -> SubAgent:
     """Instantiate an agent with the given configuration.
     
     Args:

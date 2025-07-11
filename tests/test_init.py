@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch
 import agentdk
 from agentdk import (
-    AgentInterface, SubAgentInterface, create_agent,
+    AgentInterface, SubAgent, create_agent,
     AgentConfig, AgentDKError, MCPConfigError, AgentInitializationError,
     quick_start
 )
@@ -21,7 +21,7 @@ def test_public_api_exports():
     """Test that all expected public API components are exported."""
     # Test core interfaces
     assert hasattr(agentdk, 'AgentInterface')
-    assert hasattr(agentdk, 'SubAgentInterface')
+    assert hasattr(agentdk, 'SubAgent')
     
     # Test agent creation functions
     assert hasattr(agentdk, 'create_agent')
@@ -39,9 +39,9 @@ def test_public_api_exports():
 def test_all_exports_list():
     """Test that __all__ contains all expected exports."""
     expected_exports = {
-        'AgentInterface', 'SubAgentInterface', 'Agent', 'create_agent',
-        'AgentConfig', 'AgentDKError', 'MCPConfigError', 'AgentInitializationError',
-        'quick_start'
+        'AgentInterface', 'SubAgent', 'RootAgent', 'SupervisorAgent',
+        'Agent', 'create_agent', 'AgentConfig', 'AgentDKError', 'MCPConfigError', 
+        'AgentInitializationError', 'quick_start'
     }
     
     assert hasattr(agentdk, '__all__')
@@ -71,7 +71,7 @@ def test_imports_work_correctly():
     # Test that we can import all main components without issues
     try:
         from agentdk import (
-            AgentInterface, SubAgentInterface, create_agent,
+            AgentInterface, SubAgent, create_agent,
             AgentConfig, AgentDKError, MCPConfigError, AgentInitializationError
         )
         

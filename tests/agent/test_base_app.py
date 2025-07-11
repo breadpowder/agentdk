@@ -10,6 +10,12 @@ from agentdk.agent.base_app import BaseMemoryApp, SupervisorApp
 class ConcreteBaseMemoryApp(BaseMemoryApp):
     """Concrete implementation of BaseMemoryApp for testing."""
     
+    def __init__(self, model: Any = None, **kwargs):
+        """Initialize with model and create workflow."""
+        super().__init__(**kwargs)
+        self.model = model
+        self.app = self.create_workflow(model) if model else None
+    
     def create_workflow(self, model: Any) -> Any:
         """Create a mock workflow for testing."""
         mock_workflow = Mock()
@@ -33,12 +39,18 @@ class TestBaseMemoryApp:
         
         app = ConcreteBaseMemoryApp(self.mock_model)
         
-        # Verify super().__init__ was called with defaults
+        # Verify super().__init__ was called with unified constructor signature
+        # Note: ConcreteBaseMemoryApp doesn't pass llm to super().__init__
         mock_super_init.assert_called_once_with(
-            memory=True, 
-            user_id="default", 
-            memory_config=None,
-            resume_session=None
+            llm=None,
+            config=None,
+            name=None,
+            prompt=None,
+            enable_memory=True,
+            resume_session=None,
+            memory=None,  # Default value when not specified
+            user_id="default",
+            memory_config=None
         )
         
         assert app.model == self.mock_model
@@ -58,11 +70,17 @@ class TestBaseMemoryApp:
         )
         
         # Verify super().__init__ was called with custom params
+        # Note: ConcreteBaseMemoryApp doesn't pass llm to super().__init__
         mock_super_init.assert_called_once_with(
+            llm=None,
+            config=None,
+            name=None,
+            prompt=None,
+            enable_memory=True,
+            resume_session=None,
             memory=False,
             user_id="test_user",
-            memory_config=memory_config,
-            resume_session=None
+            memory_config=memory_config
         )
         
         assert app.model == self.mock_model
@@ -180,7 +198,9 @@ class TestSupervisorApp:
         
         # Verify BaseMemoryApp.__init__ was called with defaults
         mock_super_init.assert_called_once_with(
-            self.mock_model,
+            llm=self.mock_model,
+            prompt=None,
+            enable_memory=True,
             resume_session=None
         )
     
@@ -203,10 +223,12 @@ class TestSupervisorApp:
         
         # Verify kwargs passed to parent
         mock_super_init.assert_called_once_with(
-            self.mock_model,
+            llm=self.mock_model,
+            prompt=custom_prompt,
+            enable_memory=True,
+            resume_session=None,
             memory=False,
-            user_id="test_user",
-            resume_session=None
+            user_id="test_user"
         )
     
     @patch('agentdk.agent.base_app.BaseMemoryApp.__init__')
@@ -395,11 +417,13 @@ class TestSupervisorAppIntegration:
         
         # Verify memory configuration was passed to parent
         mock_super_init.assert_called_once_with(
-            self.mock_model,
+            llm=self.mock_model,
+            prompt=None,
+            enable_memory=True,
+            resume_session=None,
             memory=True,
             user_id="memory_user",
-            memory_config=memory_config,
-            resume_session=None
+            memory_config=memory_config
         )
 
 
@@ -416,6 +440,12 @@ class TestBaseMemoryAppErrorScenarios:
         mock_super_init.return_value = None
         
         class FailingWorkflowApp(BaseMemoryApp):
+            def __init__(self, model=None, **kwargs):
+                super().__init__(**kwargs)
+                self.model = model
+                # Trigger workflow creation error during initialization
+                self.app = self.create_workflow(model)
+                
             def create_workflow(self, model):
                 raise Exception("Workflow creation failed")
         
