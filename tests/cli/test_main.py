@@ -104,3 +104,163 @@ class TestSessionsCommands:
                     main()
                     mock_manager.clear_session.assert_called_once()
                     mock_echo.assert_called_with("Cleared session for test_agent")
+
+
+class TestGlobalCLIHistory:
+    """Test the GlobalCLIHistory functionality."""
+    
+    def test_init_creates_empty_history(self):
+        """Test GlobalCLIHistory initialization with no existing file."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = False
+            mock_file.parent.mkdir = Mock()
+            
+            mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+            
+            from agentdk.cli.main import GlobalCLIHistory
+            history = GlobalCLIHistory(max_size=5)
+            
+            assert history.max_size == 5
+            assert history.commands == []
+            assert history.current_index == 0
+            mock_file.parent.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+    
+    def test_add_command(self):
+        """Test adding commands to history."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = False
+            mock_file.parent.mkdir = Mock()
+            
+            mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+            
+            from agentdk.cli.main import GlobalCLIHistory
+            history = GlobalCLIHistory(max_size=3)
+            
+            # Add commands
+            history.add_command("command1")
+            history.add_command("command2")
+            history.add_command("command3")
+            
+            assert history.commands == ["command1", "command2", "command3"]
+            assert history.current_index == 3
+    
+    def test_add_command_max_size_limit(self):
+        """Test that history respects max size limit."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = False
+            mock_file.parent.mkdir = Mock()
+            
+            mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+            
+            from agentdk.cli.main import GlobalCLIHistory
+            history = GlobalCLIHistory(max_size=2)
+            
+            # Add more commands than max size
+            history.add_command("command1")
+            history.add_command("command2")
+            history.add_command("command3")
+            
+            # Should only keep last 2 commands
+            assert history.commands == ["command2", "command3"]
+            assert len(history.commands) == 2
+    
+    def test_avoid_duplicate_consecutive_commands(self):
+        """Test that consecutive duplicate commands are avoided."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = False
+            mock_file.parent.mkdir = Mock()
+            
+            mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+            
+            from agentdk.cli.main import GlobalCLIHistory
+            history = GlobalCLIHistory(max_size=5)
+            
+            # Add same command twice
+            history.add_command("command1")
+            history.add_command("command1")
+            history.add_command("command2")
+            
+            # Should only have unique consecutive commands
+            assert history.commands == ["command1", "command2"]
+    
+    def test_get_previous_and_next(self):
+        """Test navigation through history."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = False
+            mock_file.parent.mkdir = Mock()
+            
+            mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+            
+            from agentdk.cli.main import GlobalCLIHistory
+            history = GlobalCLIHistory(max_size=5)
+            
+            # Add commands
+            history.add_command("cmd1")
+            history.add_command("cmd2")
+            history.add_command("cmd3")
+            
+            # Navigate backwards
+            assert history.get_previous() == "cmd3"
+            assert history.get_previous() == "cmd2"
+            assert history.get_previous() == "cmd1"
+            assert history.get_previous() is None  # At beginning
+            
+            # Navigate forwards
+            assert history.get_next() == "cmd2"
+            assert history.get_next() == "cmd3"
+            assert history.get_next() is None  # At end
+    
+    def test_load_and_cleanup_existing_file(self):
+        """Test loading and cleaning up existing history file."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = True
+            
+            # Mock reading a file with 5 commands, expect max_size=3 to limit it
+            file_lines = ["old1", "old2", "old3", "old4", "old5"]
+            
+            with patch('builtins.open', create=True) as mock_open:
+                # Create a mock file object that is properly iterable
+                mock_file_obj = file_lines  # Use list directly as it's iterable
+                mock_open.return_value.__enter__.return_value = mock_file_obj
+                
+                mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+                
+                from agentdk.cli.main import GlobalCLIHistory
+                
+                # Mock the save_commands method to avoid file writing during test
+                with patch.object(GlobalCLIHistory, 'save_commands'):
+                    history = GlobalCLIHistory(max_size=3)
+                    
+                    # Should keep only last 3 commands
+                    assert len(history.commands) <= 3
+    
+    def test_save_commands(self):
+        """Test saving commands to file."""
+        with patch('pathlib.Path.home') as mock_home:
+            mock_file = Mock()
+            mock_file.exists.return_value = False
+            mock_file.parent.mkdir = Mock()
+            
+            # Mock file writing
+            with patch('builtins.open', create=True) as mock_open:
+                mock_write_file = Mock()
+                mock_open.return_value.__enter__.return_value = mock_write_file
+                
+                mock_home.return_value.__truediv__.return_value.__truediv__.return_value = mock_file
+                
+                from agentdk.cli.main import GlobalCLIHistory
+                history = GlobalCLIHistory(max_size=5)
+                
+                history.add_command("test1")
+                history.add_command("test2")
+                history.save()
+                
+                # Verify file write was called
+                mock_open.assert_called()
+                mock_write_file.write.assert_called()

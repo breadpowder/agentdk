@@ -47,20 +47,20 @@ class FactualMemory(BaseMemory):
         # User scoping
         self.effective_user_id = user_id or self.memory_config.default_user_id
         
-        self.logger.info(f"FactualMemory initialized for user {self.effective_user_id}")
+        self.logger.debug(f"FactualMemory initialized for user {self.effective_user_id}")
     
     async def initialize(self) -> None:
         """Initialize factual memory system and database."""
         if self._initialized:
             return
         
-        self.logger.info("Initializing FactualMemory database")
+        self.logger.debug("Initializing FactualMemory database")
         
         # Create database tables
         await self._create_tables()
         
         self._initialized = True
-        self.logger.info("FactualMemory initialization complete")
+        self.logger.debug("FactualMemory initialization complete")
     
     async def _create_tables(self) -> None:
         """Create necessary database tables."""

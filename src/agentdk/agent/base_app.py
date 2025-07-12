@@ -23,28 +23,47 @@ class BaseMemoryApp(MemoryAwareAgent):
 
     def __init__(
         self, 
-        model: Any, 
-        memory: bool = True,
+        llm: Optional[Any] = None,
+        config: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None,
+        prompt: Optional[str] = None,
+        enable_memory: bool = True,
+        resume_session: Optional[bool] = None,
+        # Backward compatibility parameters
+        memory: Optional[bool] = None,
         user_id: str = "default",
         memory_config: Optional[Dict[str, Any]] = None,
-        resume_session: Optional[bool] = None
+        **kwargs: Any
     ):
-        """Initialize BaseMemoryApp with memory integration.
+        """Initialize BaseMemoryApp with unified parameters and memory integration.
         
         Args:
-            model: Language model instance
-            memory: Whether to enable memory system
+            llm: Language model instance
+            config: Agent configuration dictionary
+            name: Agent name for identification
+            prompt: System prompt for the agent
+            enable_memory: Whether to enable memory system (default: True)
+            resume_session: Whether to resume from previous session (None = no session management)
+            memory: [DEPRECATED] Use enable_memory instead
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
-            resume_session: Whether to resume from previous session (None = no session management)
+            **kwargs: Additional configuration parameters
         """
-        self.model = model
+        # Initialize memory system with unified parameters
+        super().__init__(
+            llm=llm,
+            config=config,
+            name=name,
+            prompt=prompt,
+            enable_memory=enable_memory,
+            resume_session=resume_session,
+            memory=memory,
+            user_id=user_id,
+            memory_config=memory_config,
+            **kwargs
+        )
         
-        # Initialize memory system
-        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session)
-        
-        # Create workflow using subclass implementation
-        self.app = self.create_workflow(model)
+        # Note: Workflow creation is now handled by subclasses in their __init__
     
     def __call__(self, query: str) -> str:
         """Process a query with memory-enhanced workflow.
@@ -110,25 +129,40 @@ class SupervisorApp(BaseMemoryApp):
 
     def __init__(
         self, 
-        model: Any, 
+        llm: Any,
         agents_config: List[Dict[str, Any]] = None,
         supervisor_prompt: str = None,
+        enable_memory: bool = True,
         resume_session: Optional[bool] = None,
+        # Backward compatibility parameters
+        model: Optional[Any] = None,
         **kwargs
     ):
-        """Initialize SupervisorApp with agent configuration.
+        """Initialize SupervisorApp with unified parameters and agent configuration.
         
         Args:
-            model: Language model instance
+            llm: Language model instance
             agents_config: List of agent configurations
             supervisor_prompt: Custom supervisor prompt
+            enable_memory: Whether to enable memory system (default: True)
             resume_session: Whether to resume from previous session (None = no session management)
+            model: [DEPRECATED] Use llm instead
             **kwargs: Additional arguments passed to BaseMemoryApp
         """
+        # Handle backward compatibility for model parameter
+        if model is not None:
+            llm = model
+        
         self.agents_config = agents_config or []
         self.supervisor_prompt = supervisor_prompt
         
-        super().__init__(model, resume_session=resume_session, **kwargs)
+        super().__init__(
+            llm=llm,
+            prompt=supervisor_prompt,
+            enable_memory=enable_memory,
+            resume_session=resume_session,
+            **kwargs
+        )
     
     def create_workflow(self, model: Any) -> Any:
         """Create supervisor workflow with configured agents.

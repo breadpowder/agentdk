@@ -29,6 +29,7 @@ def mock_memory_aware_agent():
     """Create a mock MemoryAwareAgent for testing."""
     class MockAgent(MemoryAwareAgent):
         def __init__(self):
+            self.enable_memory = True
             self.memory = Mock()
             self.memory.store_interaction = Mock()
             self.memory.working_memory = Mock()
@@ -211,6 +212,7 @@ class TestMemoryAwareAgentSessionIntegration:
         """Test restoring session when agent has no memory."""
         class NoMemoryAgent(MemoryAwareAgent):
             def __init__(self):
+                self.enable_memory = False
                 self.memory = None
             
             def __call__(self, query: str) -> str:
@@ -236,6 +238,7 @@ class TestMemoryAwareAgentSessionIntegration:
         """Test getting session state when agent has no memory."""
         class NoMemoryAgent(MemoryAwareAgent):
             def __init__(self):
+                self.enable_memory = False
                 self.memory = None
             
             def __call__(self, query: str) -> str:

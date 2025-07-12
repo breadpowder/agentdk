@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import click
+from agentdk.core.logging_config import get_logger
+
+
+logger = get_logger(__name__)
 
 
 class SessionManager:
@@ -50,7 +54,7 @@ class SessionManager:
         if self.session_file.exists():
             self.session_file.unlink()
         
-        click.echo(f"Started new session for {self.agent_name}")
+        logger.debug(f"Started new session for {self.agent_name}")
     
     async def load_session(self) -> bool:
         """Load previous session if it exists.

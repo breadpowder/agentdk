@@ -18,7 +18,7 @@ sys.path.insert(0, str(src_dir))
 
 from agentdk import Agent
 from agentdk.builder.agent_builder import AgentBuilder
-from agentdk.agent.agent_interface import SubAgentInterface
+from agentdk.agent.agent_interface import SubAgent
 
 
 class TestAgentBuilder:
@@ -200,7 +200,7 @@ class TestAgentBuilding:
         with pytest.raises(ValueError, match="LLM is required"):
             builder.build()
 
-    @patch('agentdk.builder.agent_builder.SubAgentInterface')
+    @patch('agentdk.builder.agent_builder.SubAgent')
     def test_build_creates_generic_agent(self, mock_sub_agent):
         """Test that build() creates a generic agent."""
         mock_llm = Mock()
@@ -209,7 +209,7 @@ class TestAgentBuilding:
         
         # Mock the GenericAgent creation process
         with patch.object(builder, '_create_generic_agent') as mock_create:
-            mock_agent = Mock(spec=SubAgentInterface)
+            mock_agent = Mock(spec=SubAgent)
             mock_create.return_value = mock_agent
             
             agent = builder.build()
@@ -231,7 +231,7 @@ class TestAgentBuilding:
         
         # Mock the actual agent creation to focus on configuration
         with patch.object(builder, '_create_generic_agent') as mock_create:
-            mock_agent = Mock(spec=SubAgentInterface)
+            mock_agent = Mock(spec=SubAgent)
             mock_create.return_value = mock_agent
             
             agent = builder.build()
@@ -252,7 +252,7 @@ class TestGenericAgent:
     """Test cases for the generated GenericAgent."""
 
     def test_generic_agent_implements_interface(self):
-        """Test that GenericAgent properly implements SubAgentInterface."""
+        """Test that GenericAgent properly implements SubAgent."""
         mock_llm = Mock()
         
         # Create a minimal working agent
@@ -264,8 +264,8 @@ class TestGenericAgent:
                 .with_prompt("Test prompt")
                 .build())
             
-            # Verify it's a SubAgentInterface
-            assert isinstance(agent, SubAgentInterface)
+            # Verify it's a SubAgent
+            assert isinstance(agent, SubAgent)
 
     def test_generic_agent_get_default_prompt(self):
         """Test that GenericAgent returns the resolved prompt."""
@@ -324,7 +324,7 @@ class TestIntegration:
                 .with_name("eda_agent")
                 .build())
             
-            assert isinstance(eda_agent, SubAgentInterface)
+            assert isinstance(eda_agent, SubAgent)
             assert eda_agent._get_default_prompt() == "You are an EDA expert."
 
     def test_full_research_agent_creation(self):
@@ -344,7 +344,7 @@ class TestIntegration:
                 .with_name("research_expert")
                 .build())
             
-            assert isinstance(research_agent, SubAgentInterface)
+            assert isinstance(research_agent, SubAgent)
             assert research_agent._get_default_prompt() == research_prompt
 
 

@@ -70,7 +70,7 @@ class MemoryManager:
         asyncio.run(self.working.initialize())
         asyncio.run(self.factual.initialize())
         
-        logger.info(f"MemoryManager initialized for user {user_id}, session {self.session_id}")
+        logger.debug(f"MemoryManager initialized for user {user_id}, session {self.session_id}")
     
     def _load_config(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """Load configuration from provided dict or .env variables.

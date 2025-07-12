@@ -53,7 +53,7 @@ def _setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        '%(asctime)s - %(levelname)s - [%(module)s.%(funcName)s] - %(message)s'
     )
     handler.setFormatter(formatter)
     

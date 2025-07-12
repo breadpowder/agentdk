@@ -36,10 +36,10 @@ class TestMemoryAwareAgent:
         assert agent.memory_tools is None
         
         # Test fallback methods
-        assert agent.memory_tool("stats") == "❌ Memory system not available"
-        assert agent.set_preference("ui", "test", "value") == "❌ Memory system not available"
+        assert agent.memory_tool("stats") == "❌ Memory system disabled"
+        assert agent.set_preference("ui", "test", "value") == "❌ Memory system disabled"
         assert agent.get_preference("ui", "test", "default") == "default"
-        assert agent.get_memory_stats() == "❌ Memory system not available"
+        assert agent.get_memory_stats() == "❌ Memory system disabled"
     
     @patch('agentdk.memory.memory_aware_agent.MemoryManager')
     @patch('agentdk.memory.memory_aware_agent.MemoryTools')

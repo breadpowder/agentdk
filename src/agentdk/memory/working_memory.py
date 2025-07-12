@@ -50,16 +50,16 @@ class WorkingMemory(BaseMemory):
         self.current_context: Dict[str, Any] = {}
         self.context_metadata: Dict[str, Any] = {}
         
-        self.logger.info(f"WorkingMemory initialized for user {user_id}, session {self.session_id}")
+        self.logger.debug(f"WorkingMemory initialized for user {user_id}, session {self.session_id}")
     
     async def initialize(self) -> None:
         """Initialize working memory system."""
         if self._initialized:
             return
         
-        self.logger.info("Initializing WorkingMemory")
+        self.logger.debug("Initializing WorkingMemory")
         self._initialized = True
-        self.logger.info("WorkingMemory initialization complete")
+        self.logger.debug("WorkingMemory initialization complete")
     
     async def store(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Store content in working memory.
@@ -202,7 +202,7 @@ class WorkingMemory(BaseMemory):
         self.session_start = datetime.now()
         self.last_activity = datetime.now()
         
-        self.logger.info("WorkingMemory cleared and session reset")
+        self.logger.debug("WorkingMemory cleared and session reset")
         return True
     
     async def get_stats(self) -> Dict[str, Any]:

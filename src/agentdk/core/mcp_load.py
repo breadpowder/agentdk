@@ -38,7 +38,7 @@ def get_mcp_config(agent_instance: Any) -> Dict[str, Any]:
                 _validate_mcp_config(config)
                 # Resolve relative paths in the config relative to config file location
                 config = _resolve_relative_paths(config, path.parent)
-                logger.info(f"Loaded MCP configuration from: {path}")
+                logger.debug(f"Loaded MCP configuration from: {path}")
                 return config
             except (json.JSONDecodeError, MCPConfigError) as e:
                 logger.warning(f"Invalid config at {path}: {e}")
