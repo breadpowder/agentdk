@@ -6,12 +6,12 @@ builder pattern, eliminating the need for class definitions and boilerplate code
 
 import sys
 from pathlib import Path
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 
 # Add src to path for agentdk imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
 
-from agentdk import Agent
+from agentdk.builder.agent_builder import buildAgent
 
 # Handle imports for both CLI and direct usage
 try:
@@ -27,19 +27,27 @@ except ImportError:
 
 
 def create_research_agent(
-    llm: Optional[Any] = None,
+    llm: Any,
     tools: Optional[List[Any]] = None,
+    memory_session: Optional[Any] = None,
     name: str = "research_expert",
-    resume_session: Optional[bool] = None,
+    enable_memory: bool = True,
+    user_id: str = "default",
+    memory_config: Optional[Dict[str, Any]] = None,
+    require_memory: bool = False,
     **kwargs: Any
 ) -> Any:
-    """Create a Research agent using builder pattern.
+    """Create a Research agent using dependency injection.
     
     Args:
-        llm: Language model instance
+        llm: Language model instance (required)
         tools: List of research tools (web search, etc.). If not provided, uses empty list
+        memory_session: Injected memory session (dependency injection)
         name: Agent name for identification
-        resume_session: Whether to resume from previous session (None = no session management)
+        enable_memory: Whether to enable memory (used if memory_session is None)
+        user_id: User identifier for scoped memory
+        memory_config: Optional memory configuration dictionary
+        require_memory: If True, fails fast when memory unavailable
         **kwargs: Additional configuration passed to builder
         
     Returns:
@@ -62,33 +70,24 @@ def create_research_agent(
     if tools is None:
         tools = []
     
-    # Create agent using builder pattern
-    builder = (Agent()
-        .with_llm(llm)
-        .with_prompt(get_research_agent_prompt)  # Function from prompts.py
-        .with_tools(tools)
-        .with_name(name))
+    # Create memory session if needed (dependency injection)
+    if memory_session is None and enable_memory:
+        from agentdk.agent.agent_interface import create_memory_session
+        memory_session = create_memory_session(
+            name=name,
+            user_id=user_id,
+            enable_memory=enable_memory,
+            memory_config=memory_config,
+            require_memory=require_memory
+        )
     
-    # Only add session management if explicitly requested
-    if resume_session is not None:
-        builder = builder.with_session(resume_session=resume_session)
-    
-    return builder.build()
-
-
-# Backward compatibility alias - allows existing code to work
-ResearchAgent = create_research_agent
-
-
-# Additional backward compatibility function
-def create_research_agent_legacy(llm: Any = None, log_level: str = "INFO") -> Any:
-    """Create a Research agent instance (legacy compatibility).
-    
-    Args:
-        llm: Language model instance
-        log_level: Logging level (ignored - handled by AgentDK core)
-        
-    Returns:
-        Configured Research agent
-    """
-    return create_research_agent(llm=llm)
+    # Create agent using clean direct interface
+    return buildAgent(
+        agent_class="SubAgentWithoutMCP",
+        llm=llm,
+        tools=tools,
+        memory_session=memory_session,
+        name=name,
+        prompt=get_research_agent_prompt(),
+        **kwargs
+    )

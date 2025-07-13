@@ -51,7 +51,7 @@ class EpisodicMemory:
         self.db_path = self.storage_path / f"episodic_{user_id}.db"
         self._init_database()
         
-        logger.info(f"EpisodicMemory initialized for user {user_id}")
+        logger.debug(f"EpisodicMemory initialized for user {user_id}")
     
     def _init_database(self) -> None:
         """Initialize SQLite database with conversation tables."""

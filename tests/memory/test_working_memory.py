@@ -35,9 +35,9 @@ class TestWorkingMemoryInitialization:
             assert memory.context_metadata == {}
             assert not memory.is_initialized()
             
-            # Verify logging
-            mock_logger.info.assert_called_once()
-            log_msg = mock_logger.info.call_args[0][0]
+            # Verify logging (debug level)
+            mock_logger.debug.assert_called_once()
+            log_msg = mock_logger.debug.call_args[0][0]
             assert "WorkingMemory initialized" in log_msg
             assert memory.session_id in log_msg
     
@@ -83,7 +83,7 @@ class TestWorkingMemoryInitialize:
             await memory.initialize()
             
             assert memory.is_initialized()
-            assert mock_logger.info.call_count >= 2  # Initialization messages
+            assert mock_logger.debug.call_count >= 2  # Initialization messages
     
     @pytest.mark.asyncio
     async def test_initialize_already_initialized(self):
@@ -495,7 +495,7 @@ class TestWorkingMemoryClear:
             assert memory.session_id != old_session_id
             assert memory.session_start > old_session_start
             
-            mock_logger.info.assert_called()
+            mock_logger.debug.assert_called()
 
 
 class TestWorkingMemoryStats:

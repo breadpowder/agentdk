@@ -227,13 +227,14 @@ examples/RESPONSE_CONSISTENCY_FIX.md
 # Local scratch pads and planning files
 *.md
 !README.md
+!CLAUDE.md
 plan/
 adk_python/
 langchain-mcp-adapters/
 
 # Allow .claude memory system but keep local files private
-.claude/
-CLAUDE.md
+.claude/*
+!.claude/commands
 CLAUDE.local.md
 mysql_mcp_server/
 langchain_mcp_server/

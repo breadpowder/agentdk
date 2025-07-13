@@ -4,8 +4,9 @@ import pytest
 from unittest.mock import patch
 import agentdk
 from agentdk import (
-    AgentInterface, SubAgentInterface, create_agent,
-    AgentConfig, AgentDKError, MCPConfigError, AgentInitializationError,
+    AgentInterface, SubAgent, App, RootAgent, create_agent,
+    AgentBuilder, buildAgent, create_memory_session,
+    AgentDKError, MCPConfigError, AgentInitializationError,
     quick_start
 )
 
@@ -21,11 +22,15 @@ def test_public_api_exports():
     """Test that all expected public API components are exported."""
     # Test core interfaces
     assert hasattr(agentdk, 'AgentInterface')
-    assert hasattr(agentdk, 'SubAgentInterface')
+    assert hasattr(agentdk, 'SubAgent')
+    assert hasattr(agentdk, 'App')
+    assert hasattr(agentdk, 'RootAgent')
     
     # Test agent creation functions
     assert hasattr(agentdk, 'create_agent')
-    assert hasattr(agentdk, 'AgentConfig')
+    assert hasattr(agentdk, 'AgentBuilder')
+    assert hasattr(agentdk, 'buildAgent')
+    assert hasattr(agentdk, 'create_memory_session')
     
     # Test exceptions
     assert hasattr(agentdk, 'AgentDKError')
@@ -39,9 +44,9 @@ def test_public_api_exports():
 def test_all_exports_list():
     """Test that __all__ contains all expected exports."""
     expected_exports = {
-        'AgentInterface', 'SubAgentInterface', 'Agent', 'create_agent',
-        'AgentConfig', 'AgentDKError', 'MCPConfigError', 'AgentInitializationError',
-        'quick_start'
+        'AgentInterface', 'SubAgent', 'App', 'RootAgent',
+        'AgentBuilder', 'buildAgent', 'create_agent', 'create_memory_session',
+        'AgentDKError', 'MCPConfigError', 'AgentInitializationError', 'quick_start'
     }
     
     assert hasattr(agentdk, '__all__')
@@ -71,13 +76,19 @@ def test_imports_work_correctly():
     # Test that we can import all main components without issues
     try:
         from agentdk import (
-            AgentInterface, SubAgentInterface, create_agent,
-            AgentConfig, AgentDKError, MCPConfigError, AgentInitializationError
+            AgentInterface, SubAgent, App, RootAgent, create_agent,
+            AgentBuilder, buildAgent, create_memory_session,
+            AgentDKError, MCPConfigError, AgentInitializationError
         )
         
         # Test that they are callable/classes as expected
         assert callable(create_agent)
-        assert isinstance(AgentConfig, type)
+        assert callable(buildAgent)
+        assert callable(create_memory_session)
+        assert isinstance(AgentBuilder, type)
+        assert isinstance(AgentInterface, type)
+        assert isinstance(App, type)
+        assert isinstance(RootAgent, type)
         assert isinstance(AgentDKError, type)
         assert isinstance(MCPConfigError, type)
         assert isinstance(AgentInitializationError, type)

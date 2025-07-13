@@ -16,24 +16,27 @@ Examples:
     
 """
 
-from .agent.agent_interface import AgentInterface, SubAgentInterface
-from .agent.factory import create_agent, AgentConfig
-from .builder.agent_builder import Agent
+from .agent.agent_interface import AgentInterface, SubAgent, App, RootAgent, create_memory_session
+from .agent.factory import create_agent
+from .builder.agent_builder import AgentBuilder, buildAgent
 from .exceptions import AgentDKError, MCPConfigError, AgentInitializationError
 
 # Public API version
 __version__ = "0.1.0"
 
-# Controlled public exports
+# Clean public exports
 __all__ = [
     # Core interfaces
     "AgentInterface",
-    "SubAgentInterface",
+    "SubAgent",
+    "App",
+    "RootAgent",
     
     # Agent creation
-    "Agent",  # New builder pattern factory
+    "AgentBuilder",
+    "buildAgent",
     "create_agent",
-    "AgentConfig",
+    "create_memory_session",
     
     # Exceptions
     "AgentDKError",
@@ -56,12 +59,15 @@ def quick_start() -> None:
     
     🔧 Basic Usage:
         from agentdk import create_agent
-        agent = create_agent('eda', llm=your_llm)
+        agent = create_agent('mcp', llm=your_llm, mcp_config_path='config.json')
     
     ⚙️  Custom Configuration:
-        from agentdk import AgentConfig, create_agent
-        config = AgentConfig(mcp_config_path='path/to/config.json')
-        agent = create_agent('custom', config=config, llm=your_llm)
+        from agentdk import buildAgent
+        agent = buildAgent(
+            agent_class="SubAgentWithMCP",
+            llm=your_llm,
+            mcp_config_path='config.json'
+        )
     
     
     🚀 LangGraph Integration:
