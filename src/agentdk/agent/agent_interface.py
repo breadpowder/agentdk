@@ -12,22 +12,102 @@ from ..core.persistent_mcp import PersistentSessionManager, CleanupManager
 from ..exceptions import AgentInitializationError, MCPConfigError
 
 
-class AgentInterface(ABC):
-    """Abstract base class for all ML agents."""
+def create_memory_session(
+    name: Optional[str] = None,
+    user_id: str = "default",
+    enable_memory: bool = True,
+    memory_config: Optional[Dict[str, Any]] = None,
+    require_memory: bool = False
+) -> Optional[Any]:
+    """Factory function for dependency injection with proper error handling.
+    
+    Args:
+        name: Optional memory session name
+        user_id: User identifier for scoped memory
+        enable_memory: Whether to enable memory functionality
+        memory_config: Optional memory configuration
+        require_memory: If True, raises error when memory unavailable (fail-fast)
+        
+    Returns:
+        MemoryAwareSession instance if enabled and available, None otherwise
+        
+    Raises:
+        AgentInitializationError: If memory required but dependencies unavailable
+    """
+    if not enable_memory:
+        return None
+        
+    try:
+        from ..memory.memory_aware_agent import MemoryAwareSession
+        from ..core.logging_config import get_logger
+        
+        logger = get_logger()
+        logger.debug(f"Creating memory session: name={name}, user_id={user_id}")
+        
+        return MemoryAwareSession(
+            name=name,
+            user_id=user_id,
+            memory_config=memory_config
+        )
+        
+    except ImportError as e:
+        from ..core.logging_config import get_logger
+        from ..exceptions import AgentInitializationError
+        
+        logger = get_logger()
+        error_msg = f"Memory functionality unavailable: {e}"
+        
+        if require_memory:
+            logger.error(error_msg)
+            raise AgentInitializationError(
+                "Memory functionality explicitly required but dependencies not available. "
+                "Install memory dependencies or set enable_memory=False."
+            ) from e
+        else:
+            logger.warning(f"{error_msg}. Continuing without memory functionality.")
+            return None
+            
+    except Exception as e:
+        from ..core.logging_config import get_logger
+        from ..exceptions import AgentInitializationError
+        
+        logger = get_logger()
+        logger.error(f"Failed to create memory session: {e}")
+        
+        if require_memory:
+            raise AgentInitializationError(
+                f"Failed to create required memory session: {e}"
+            ) from e
+        else:
+            logger.warning(f"Memory session creation failed: {e}. Continuing without memory.")
+            return None
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None, resume_session: Optional[bool] = None) -> None:
-        """Initialize the agent with optional configuration.
+
+class AgentInterface(ABC):
+    """Abstract base class for all ML agents with dependency injection."""
+
+    def __init__(
+        self, 
+        memory_session: Optional[Any] = None,
+        config: Optional[Dict[str, Any]] = None,
+        resume_session: Optional[bool] = None,
+        **kwargs: Any
+    ) -> None:
+        """Initialize the agent with dependency injection.
 
         Args:
+            memory_session: Injected memory session (dependency injection)
             config: Optional configuration dictionary for the agent
             resume_session: Whether to resume from previous session (None = no session management)
+            **kwargs: Additional keyword arguments
         """
+        self.memory_session = memory_session
         self.config = config or {}
         self.resume_session = resume_session
 
     @abstractmethod
     def query(self, user_prompt: str, **kwargs) -> str:
-        """Process a user prompt and return a response.
+        """Primary interface: Process user prompt and return response.
 
         Args:
             user_prompt: The user's input prompt
@@ -38,35 +118,104 @@ class AgentInterface(ABC):
         """
         pass
     
-    def _get_default_prompt(self) -> str:
-        """Get the default system prompt for this agent type.
-
-        Returns:
-            Default system prompt for the agent
-        """
-        return "You are a helpful AI assistant."
-
-
-class RootAgent(AgentInterface):
-    """Root agent class for application-level agents.
+    def __call__(self, user_prompt: str, **kwargs) -> str:
+        """Syntax sugar: Calls query() for convenience."""
+        return self.query(user_prompt, **kwargs)
     
-    This class provides a foundation for agents that are used at the application 
-    level, such as supervisor agents or main application agents. It includes
-    basic initialization and configuration management.
-    """
+    def _get_default_prompt(self) -> str:
+        """Get default system prompt for agent type."""
+        return "You are a helpful AI assistant."
+    
+    # MEMORY UTILITIES (when memory_session is injected)
+    def get_memory_context(self, query: str) -> Optional[str]:
+        """Get memory context if memory session available."""
+        return self.memory_session.get_memory_context(query) if self.memory_session else None
+
+    def store_interaction(self, query: str, response: str) -> None:
+        """Store interaction if memory session available."""
+        if self.memory_session:
+            self.memory_session.store_interaction(query, response)
+
+    def get_memory_aware_prompt(self, base_prompt: str) -> str:
+        """Enhance prompt with memory context if available."""
+        if self.memory_session:
+            memory_context = self.memory_session.get_memory_context(base_prompt)
+            if memory_context:
+                return f"{memory_context}\n\n{base_prompt}"
+        return base_prompt
+
+
+class App(ABC):
+    """Application base class with pure application concerns."""
     
     def __init__(
         self,
         config: Optional[Dict[str, Any]] = None,
-        resume_session: Optional[bool] = None
-    ) -> None:
-        """Initialize the root agent.
+        name: Optional[str] = None,
+        **kwargs: Any
+    ):
+        """Initialize application.
         
         Args:
-            config: Optional configuration dictionary for the agent
-            resume_session: Whether to resume from previous session (None = no session management)
+            config: Optional configuration dictionary
+            name: Optional application name
+            **kwargs: Additional keyword arguments
         """
-        super().__init__(config, resume_session)
+        self.config = config or {}
+        self.name = name
+    
+    @abstractmethod
+    def create_workflow(self, llm: Any) -> Any:
+        """Create and return workflow instance."""
+        pass
+    
+    @abstractmethod
+    def clean_app(self) -> None:
+        """Cleanup application resources."""
+        pass
+
+
+class RootAgent(App, AgentInterface):
+    """Root agent with multiple inheritance: App + AgentInterface.
+    
+    Combines application logic + agent interface for applications that need agent capabilities.
+    """
+    
+    def __init__(
+        self,
+        memory_session: Optional[Any] = None,
+        config: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None,
+        resume_session: Optional[bool] = None,
+        **kwargs: Any
+    ) -> None:
+        """Initialize root agent with multiple inheritance.
+        
+        Args:
+            memory_session: Injected memory session (dependency injection)
+            config: Optional configuration dictionary
+            name: Optional agent name
+            resume_session: Whether to resume from previous session
+            **kwargs: Additional keyword arguments
+        """
+        # Initialize both parent classes
+        App.__init__(self, config=config, name=name, **kwargs)
+        AgentInterface.__init__(self, memory_session=memory_session, config=config, resume_session=resume_session, **kwargs)
+    
+    def query(self, user_prompt: str, **kwargs) -> str:
+        """Concrete implementation combining app logic + agent interface."""
+        # Memory integration
+        if self.memory_session:
+            enhanced_input = self.memory_session.process_with_memory(user_prompt)
+            response = self._process_query(user_prompt, enhanced_input)
+            return self.memory_session.finalize_with_memory(user_prompt, response)
+        else:
+            return self._process_query(user_prompt, {})
+    
+    @abstractmethod  
+    def _process_query(self, user_prompt: str, enhanced_input: Dict) -> str:
+        """Subclasses implement processing logic."""
+        pass
 
 
 
@@ -76,41 +225,57 @@ class RootAgent(AgentInterface):
 # Import MemoryAwareAgent to create memory-enabled SubAgent
 # Note: Placed at end to avoid circular imports during module initialization
 try:
-    from ..memory.memory_aware_agent import MemoryAwareAgent
+    from ..memory.memory_aware_agent import MemoryAwareSession
     
-    class SubAgent(MemoryAwareAgent, ABC):
-        """Memory-enabled SubAgent class that combines SubAgentInterface functionality with memory capabilities.
+    class SubAgent(AgentInterface, ABC):
+        """Individual agent implementations with dependency injection.
         
-        This class provides the new unified agent interface that all subagents should inherit from.
-        It combines the MCP integration capabilities of SubAgentInterface with the memory management
-        capabilities of MemoryAwareAgent.
+        SubAgent inherits from AgentInterface and implements agent-specific functionality
+        with dependency injection for memory sessions.
         """
         
         def __init__(
             self,
             llm: Any,
+            memory_session: Optional[Any] = None,
             config: Optional[Dict[str, Any]] = None,
             mcp_config_path: Optional[Union[str, Path]] = None,
             name: Optional[str] = None,
             prompt: Optional[str] = None,
             tools: Optional[List[Any]] = None,
-            enable_memory: bool = True,
             resume_session: Optional[bool] = None,
             **kwargs: Any,
         ) -> None:
-            """Initialize SubAgent with unified parameters and memory + MCP capabilities."""
-            # Initialize memory system first
+            """Initialize SubAgent with dependency injection.
+            
+            Args:
+                llm: Language model instance (required)
+                memory_session: Injected memory session (dependency injection)
+                config: Optional configuration dictionary
+                mcp_config_path: Optional MCP configuration path
+                name: Optional agent identifier
+                prompt: Optional agent system prompt
+                tools: Optional available tools
+                resume_session: Whether to resume from previous session
+                **kwargs: Additional keyword arguments
+            """
+            # Initialize with dependency injection
             super().__init__(
-                llm=llm,
+                memory_session=memory_session,
                 config=config,
-                name=name,
-                prompt=prompt,
-                enable_memory=enable_memory,
                 resume_session=resume_session,
                 **kwargs
             )
             
-            # Add MCP-specific attributes from SubAgentInterface
+            # Agent-specific attributes
+            self.llm = llm
+            self.name = name or self.__class__.__name__.lower().replace('agent', '')
+
+            if prompt is None:
+                raise ValueError("prompt cannot be None for SubAgent")
+            self.prompt = prompt
+            
+            # MCP-specific attributes
             self._mcp_client: Optional[Any] = None
             self._mcp_config_path: Optional[Path] = (
                 Path(mcp_config_path) if mcp_config_path else None
@@ -124,10 +289,53 @@ try:
             self.logger = get_logger()
             ensure_nest_asyncio()
 
+        def query(self, user_prompt: str, **kwargs) -> str:
+            """FIXED: Concrete implementation with LLM integration (sync wrapper)."""
+            # Synchronous wrapper for async implementation
+            import asyncio
+            import nest_asyncio
+            
+            # Apply nest_asyncio to allow nested asyncio.run() calls
+            # This prevents event loop boundary issues with LangGraph supervisor
+            nest_asyncio.apply()
+            
+            try:
+                if asyncio.iscoroutinefunction(self.query_async):
+                    return asyncio.run(self.query_async(user_prompt, **kwargs))
+                else:
+                    # Memory integration
+                    if self.memory_session:
+                        enhanced_input = self.memory_session.process_with_memory(user_prompt)
+                        response = self._execute_with_llm(user_prompt, enhanced_input)
+                        return self.memory_session.finalize_with_memory(user_prompt, response)
+                    else:
+                        return self._execute_with_llm(user_prompt, {})
+            except Exception as e:
+                import traceback
+                self.logger.error(f"Query execution failed: {e}")
+                self.logger.error(f"Stack trace:\n{traceback.format_exc()}")
+                return f"Query execution failed: {e}"
+        
         @abstractmethod
-        async def _create_langgraph_agent(self) -> None:
-            """Create the LangGraph agent for this agent type."""
+        def _execute_with_llm(self, user_prompt: str, enhanced_input: Dict) -> str:
+            """Subclasses implement LLM execution logic."""
             pass
+        
+        async def _create_langgraph_agent(self) -> None:
+            """Create LangGraph reactive agent with available tools."""
+            try:
+                from langgraph.prebuilt import create_react_agent
+
+                # Create react agent with LLM and tools
+                self.agent = create_react_agent(self.llm, self._tools)
+
+                self.logger.info(f"Created LangGraph agent with {len(self._tools)} tools")
+
+            except ImportError as e:
+                self.logger.error(f"Failed to import LangGraph: {e}")
+            except Exception as e:
+                self.logger.error(f"Failed to create LangGraph agent: {e}")
+                raise
 
         async def _initialize(self) -> None:
             """Initialize MCP connections and load tools."""
@@ -214,8 +422,148 @@ try:
                 return []
 
         def _wrap_tools_with_logging(self, tools: List[Any]) -> List[Any]:
-            """Wrap all tools with unified logging capabilities."""
-            return tools  # Simplified for now, can implement full logging wrapper later
+            """Wrap all tools with unified logging capabilities.
+
+            Args:
+                tools: List of tools to wrap
+
+            Returns:
+                List of wrapped tools with logging
+            """
+            wrapped_tools = []
+
+            for tool in tools:
+                try:
+                    wrapped_tool = self._create_logging_wrapper(tool)
+                    wrapped_tools.append(wrapped_tool)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Failed to wrap tool {getattr(tool, 'name', 'unknown')}: {e}"
+                    )
+                    # Include original tool if wrapping fails
+                    wrapped_tools.append(tool)
+
+            return wrapped_tools
+
+        def _create_logging_wrapper(self, tool: Any) -> Any:
+            """Create a unified logging wrapper for any tool type.
+
+            Args:
+                tool: Tool to wrap
+
+            Returns:
+                Wrapped tool with logging
+            """
+            # Try multiple function attribute patterns for different tool types
+            original_func = (
+                getattr(tool, "func", None)
+                or getattr(tool, "_func", None)
+                or getattr(tool, "coroutine", None)  # StructuredTool from MCP adapters
+            )
+
+            if not original_func:
+                self.logger.warning(
+                    f"Could not find function for tool {getattr(tool, 'name', 'unknown')}"
+                )
+                return tool
+
+            async def logged_invoke(**kwargs):
+                # Log tool execution in JSON format
+                import json
+
+                log_data = {
+                    "tool": getattr(tool, "name", "unknown_tool"),
+                    "args": {k: self._sanitize_for_logging(v) for k, v in kwargs.items()},
+                }
+                self.logger.info(json.dumps(log_data))
+
+                try:
+                    # Execute original tool
+                    if asyncio.iscoroutinefunction(original_func):
+                        result = await original_func(**kwargs)
+                    else:
+                        result = original_func(**kwargs)
+
+                    # Log completion in JSON format
+                    completion_data = {
+                        "tool": getattr(tool, "name", "unknown_tool"),
+                        "status": "successful",
+                    }
+                    self.logger.info(json.dumps(completion_data))
+                    return result
+
+                except Exception as e:
+                    # Log error in JSON format
+                    error_data = {
+                        "tool": getattr(tool, "name", "unknown_tool"),
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                    self.logger.error(json.dumps(error_data))
+                    raise
+
+            # Create new tool with wrapped function
+            return self._create_wrapped_tool(tool, logged_invoke)
+
+        def _create_wrapped_tool(self, original_tool: Any, wrapped_func: Any) -> Any:
+            """Create a new tool with wrapped function.
+
+            Args:
+                original_tool: Original tool to wrap
+                wrapped_func: Wrapped function
+
+            Returns:
+                New tool with wrapped function
+            """
+            # This implementation depends on the specific tool type
+            # For LangChain tools, we'd use StructuredTool
+            try:
+                from langchain_core.tools import StructuredTool
+
+                return StructuredTool(
+                    name=getattr(original_tool, "name", "unknown_tool"),
+                    description=getattr(original_tool, "description", "Tool with logging"),
+                    args_schema=getattr(original_tool, "args_schema", None),
+                    coroutine=wrapped_func,  # Use coroutine instead of func for async tools
+                )
+            except ImportError:
+                try:
+                    # Fallback to older import path
+                    from langchain.tools import StructuredTool
+
+                    return StructuredTool(
+                        name=getattr(original_tool, "name", "unknown_tool"),
+                        description=getattr(
+                            original_tool, "description", "Tool with logging"
+                        ),
+                        args_schema=getattr(original_tool, "args_schema", None),
+                        func=wrapped_func,
+                    )
+                except ImportError:
+                    # Final fallback: return original tool if StructuredTool not available
+                    self.logger.warning(
+                        "StructuredTool not available, returning original tool"
+                    )
+                    return original_tool
+
+        def _sanitize_for_logging(self, value: Any) -> str:
+            """Sanitize any value for safe logging.
+
+            Args:
+                value: Value to sanitize
+
+            Returns:
+                Sanitized value safe for logging
+            """
+            # Return the value as-is for debugging purposes
+            if not isinstance(value, str):
+                return str(value)
+
+            # Just limit length if too long, but keep the actual content
+            if len(value) > 500:
+                return value[:500] + "..."
+
+            return value
 
         async def query_async(self, user_prompt: str, **kwargs: Any) -> str:
             """Async version of query for direct async usage."""
@@ -226,15 +574,33 @@ try:
                 actual_query, memory_context = self._parse_memory_context(user_prompt)
 
                 if self.agent:
-                    system_prompt = self.config.get("system_prompt", self._get_default_prompt())
+                    from langchain_core.messages import HumanMessage, SystemMessage
+                    
+                    system_prompt = self.prompt
+                    self.logger.debug(f"Using system prompt: {system_prompt[:100]}...")
+                    
+                    messages = []
+                    if system_prompt:
+                        messages.append(SystemMessage(content=system_prompt))
                     if memory_context:
-                        system_prompt += f"\n\nMEMORY CONTEXT:\n{memory_context}"
-                    full_prompt = f"{system_prompt}\n\nUser Question: {actual_query}"
-                    result = await self.agent.ainvoke({"messages": [full_prompt]})
+                        messages.append(SystemMessage(content=f"MEMORY CONTEXT:\n{memory_context}"))
+                    messages.append(HumanMessage(content=actual_query))
+                    
+                    self.logger.debug(f"Sending {len(messages)} messages to agent")
+                    self.logger.debug(f"User query: {actual_query}")
+                    
+                    self.logger.debug("About to call agent.ainvoke() - ENTRY POINT")
+                    result = await self.agent.ainvoke({"messages": messages})
+                    self.logger.debug("Successfully returned from agent.ainvoke() - EXIT POINT")
+                    self.logger.debug(f"Agent result type: {type(result)}")
+                    self.logger.debug(f"Agent result: {str(result)[:200]}...")
 
                     if isinstance(result, dict) and "messages" in result:
                         last_message = result["messages"][-1]
-                        return getattr(last_message, "content", str(last_message))
+                        msg = getattr(last_message, "content", str(last_message))
+                        self.logger.debug(f"Parsed msg {msg}")
+                        return msg
+
                     else:
                         return str(result)
                 else:
@@ -265,44 +631,9 @@ try:
                     return user_prompt, ""
             return user_prompt, ""
 
-        def invoke(self, state: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-            """Invoke method for LangGraph compatibility."""
-            try:
-                messages = state.get("messages", [])
-                if not messages:
-                    from langchain_core.messages import AIMessage
-                    return {"messages": [AIMessage(content="No input provided")]}
-
-                # Find user input from messages
-                user_input = ""
-                for message in messages:
-                    if hasattr(message, "content") and hasattr(message, "type"):
-                        if message.type in ("human", "user"):
-                            user_input = message.content
-                            break
-                    elif isinstance(message, dict):
-                        role = message.get("role", "")
-                        if role in ("user", "human"):
-                            user_input = message.get("content", "")
-                            break
-
-                if not user_input and messages:
-                    last_message = messages[-1]
-                    if hasattr(last_message, "content"):
-                        user_input = last_message.content
-                    elif isinstance(last_message, dict):
-                        user_input = last_message.get("content", "")
-                    else:
-                        user_input = str(last_message)
-
-                result = self.query(user_input)
-                from langchain_core.messages import AIMessage
-                return {"messages": [AIMessage(content=result)]}
-
-            except Exception as e:
-                self.logger.error(f"Error in invoke method: {e}")
-                from langchain_core.messages import AIMessage
-                return {"messages": [AIMessage(content=f"Error processing request: {e}")]}
+        def process(self, query: str) -> str:
+            """Legacy method - calls primary query() interface."""
+            return self.query(query)
 
         @property
         def tools(self) -> List[Any]:
@@ -314,42 +645,81 @@ try:
             """Check if the agent has been initialized."""
             return self._initialized
 
-        def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
-            """Process the current state and return updated state."""
+        # LANGGRAPH COMPATIBILITY
+        def invoke(self, state: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+            """LangGraph compatibility layer - wraps query()."""
             try:
-                user_input = state.get('user_input', state.get('query', ''))
-                if not user_input:
-                    state['agent_output'] = "No user input provided"
-                    return state
-
-                result = self.query(user_input)
-                state['agent_output'] = result
-                state['agent_type'] = self.name or 'subagent'
-                return state
-
+                # Extract user input from LangGraph state format
+                if isinstance(state, dict) and "messages" in state:
+                    messages = state.get("messages", [])
+                    if not messages:
+                        from langchain_core.messages import AIMessage
+                        return {"messages": [AIMessage(content="No input provided")]}
+                    
+                    user_input = self._extract_user_input(state)
+                    response = self.query(user_input)  # Use primary interface
+                    return self._format_langgraph_response(response)
+                else:
+                    response = self.query(str(state))
+                    return self._format_langgraph_response(response)
             except Exception as e:
-                error_msg = f"Agent processing error: {e}"
-                self.logger.error(error_msg)
-                state['agent_output'] = error_msg
-                state['error'] = str(e)
-                return state
+                from langchain_core.messages import AIMessage
+                return {"messages": [AIMessage(content=f"Error processing request: {e}")]}
+        
+        def _extract_user_input(self, state: Dict[str, Any]) -> str:
+            """Extract user input from LangGraph state format."""
+            messages = state.get("messages", [])
+            if not messages:
+                return ""
+            
+            # Find user input from messages (skip transfer messages)
+            for message in messages:
+                # Skip transfer-related messages
+                if hasattr(message, "content") and "transferred to agent" in str(message.content).lower():
+                    continue
+                
+                if hasattr(message, "content") and hasattr(message, "type"):
+                    if message.type in ("human", "user"):
+                        return message.content
+                elif isinstance(message, dict):
+                    content = message.get("content", "")
+                    # Skip transfer messages
+                    if "transferred to agent" in content.lower():
+                        continue
+                    role = message.get("role", "")
+                    if role in ("user", "human"):
+                        return content
+            
+            # Fallback to last non-transfer message
+            for message in reversed(messages):
+                if hasattr(message, "content"):
+                    content = message.content
+                elif isinstance(message, dict):
+                    content = message.get("content", "")
+                else:
+                    content = str(message)
+                
+                # Skip transfer messages
+                if "transferred to agent" not in content.lower():
+                    return content
+            
+            return ""
+        
+        def _format_langgraph_response(self, response: str) -> Dict[str, Any]:
+            """Format response for LangGraph."""
+            from langchain_core.messages import AIMessage
+            return {"messages": [AIMessage(content=response)]}
 
     class SubAgentWithMCP(SubAgent):
-        """Concrete SubAgent implementation with MCP capabilities.
-        
-        This class provides MCP integration for agents that need to interact with
-        MCP servers for tools and capabilities.
-        """
+        """SubAgent implementation with MCP capabilities."""
         
         def __init__(
             self,
             llm: Any,
             mcp_config_path: Union[str, Path],
-            config: Optional[Dict[str, Any]] = None,
+            memory_session: Optional[Any] = None,
             name: Optional[str] = None,
             prompt: Optional[str] = None,
-            enable_memory: bool = True,
-            resume_session: Optional[bool] = None,
             **kwargs: Any,
         ) -> None:
             """Initialize SubAgentWithMCP.
@@ -357,15 +727,10 @@ try:
             Args:
                 llm: Language model instance (required)
                 mcp_config_path: Path to MCP configuration file (required)
-                config: Optional configuration dictionary
+                memory_session: Injected memory session (dependency injection)
                 name: Optional agent name
                 prompt: Optional system prompt
-                enable_memory: Whether to enable memory capabilities
-                resume_session: Whether to resume from previous session
                 **kwargs: Additional configuration parameters
-                
-            Raises:
-                ValueError: If mcp_config_path is not provided
             """
             if not mcp_config_path:
                 raise ValueError("mcp_config_path is required for SubAgentWithMCP")
@@ -373,27 +738,24 @@ try:
             # Resolve MCP config path
             resolved_path = self._resolve_mcp_config_path(mcp_config_path)
             
-            # Initialize with MCP configuration
+            # Initialize with dependency injection
             super().__init__(
                 llm=llm,
-                config=config,
+                memory_session=memory_session,
                 mcp_config_path=resolved_path,
                 name=name,
                 prompt=prompt,
-                enable_memory=enable_memory,
-                resume_session=resume_session,
                 **kwargs
             )
         
+        def _execute_with_llm(self, user_prompt: str, enhanced_input: Dict) -> str:
+            """Execute with MCP tools."""
+            # Implementation depends on specific MCP agent logic
+            return f"MCP agent response to: {user_prompt}"
+        
+        
         def _resolve_mcp_config_path(self, mcp_config_path: Union[str, Path]) -> Path:
-            """Resolve MCP config path relative to the agent's file location.
-            
-            Args:
-                mcp_config_path: Relative or absolute path to MCP config
-                
-            Returns:
-                Resolved absolute path to MCP config
-            """
+            """Resolve MCP config path relative to the agent's file location."""
             config_path = Path(mcp_config_path)
             
             # If it's already absolute, return as-is
@@ -416,47 +778,44 @@ try:
                 return config_path.resolve()
     
     class SubAgentWithoutMCP(SubAgent):
-        """Concrete SubAgent implementation without MCP.
-        
-        This class provides functionality for agents that work with external APIs,
-        web services, or other non-MCP tools.
-        """
+        """SubAgent implementation without MCP."""
         
         def __init__(
             self,
             llm: Any,
-            config: Optional[Dict[str, Any]] = None,
+            tools: Optional[List[Any]] = None,
+            memory_session: Optional[Any] = None,
             name: Optional[str] = None,
             prompt: Optional[str] = None,
-            tools: Optional[List[Any]] = None,
-            enable_memory: bool = True,
-            resume_session: Optional[bool] = None,
             **kwargs: Any,
         ) -> None:
             """Initialize SubAgentWithoutMCP.
             
             Args:
                 llm: Language model instance (required)
-                config: Optional configuration dictionary
+                tools: Optional list of external tools
+                memory_session: Injected memory session (dependency injection)
                 name: Optional agent name
                 prompt: Optional system prompt
-                tools: Optional list of external tools
-                enable_memory: Whether to enable memory capabilities
-                resume_session: Whether to resume from previous session
                 **kwargs: Additional configuration parameters
             """
             # Initialize without MCP configuration
             super().__init__(
                 llm=llm,
-                config=config,
+                memory_session=memory_session,
                 mcp_config_path=None,  # No MCP
                 name=name,
                 prompt=prompt,
                 tools=tools or [],
-                enable_memory=enable_memory,
-                resume_session=resume_session,
                 **kwargs
             )
+        
+        def _execute_with_llm(self, user_prompt: str, enhanced_input: Dict) -> str:
+            """Execute with direct tools."""
+            # Implementation depends on specific non-MCP agent logic
+            return f"Non-MCP agent response to: {user_prompt}"
+        
+
 
 except ImportError:
     # If MemoryAwareAgent is not available, create a placeholder

@@ -269,7 +269,7 @@ def _run_agent_query(agent_path: str, query: str, resume: bool = False) -> str:
     Returns:
         Agent response as string
     """
-    cmd = ["uv", "run", "python", "-m", "agentdk.cli.main", "run", agent_path]
+    cmd = ["uv", "run", "python", "-m", "agentdk.cli.main", "--log-level", "DEBUG", "run", agent_path]
     if resume:
         cmd.append("--resume")
     
@@ -290,15 +290,41 @@ def _run_agent_query(agent_path: str, query: str, resume: bool = False) -> str:
         
         stdout, stderr = process.communicate(input=query, timeout=60)
         
+        # Parse stdout to separate debug logs from user response
+        def extract_user_response(output: str) -> str:
+            """Extract user response from mixed debug logs and user output."""
+            if not output:
+                return ""
+            
+            lines = output.strip().split('\n')
+            user_response_lines = []
+            
+            for line in lines:
+                # Skip debug log lines (contain timestamp and log level)
+                if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', line):
+                    continue
+                # Skip other log-like patterns
+                if any(pattern in line for pattern in ['DEBUG', 'INFO', 'WARNING', 'ERROR', '- [', '] -']):
+                    continue
+                # Skip empty lines and agent startup messages
+                if line.strip() == '' or line.startswith('✅') or line.startswith('Starting'):
+                    continue
+                # Keep user-facing output
+                user_response_lines.append(line)
+            
+            return '\n'.join(user_response_lines).strip()
+        
         if process.returncode != 0:
             # Log error but don't fail test immediately - agent might still provide useful output
             print(f"Agent process returned {process.returncode}")
             print(f"STDERR: {stderr}")
-            # Return stderr + stdout for analysis as the agent may provide error information
-            return f"{stderr}\n{stdout}".strip()
+            # Extract user response from combined output
+            user_response = extract_user_response(f"{stderr}\n{stdout}")
+            return user_response if user_response else f"Process failed with code {process.returncode}"
         
-        # Return stdout for successful runs
-        return stdout.strip()
+        # Return only user response for successful runs
+        user_response = extract_user_response(stdout)
+        return user_response if user_response else "No user response found"
         
     except subprocess.TimeoutExpired:
         process.kill()

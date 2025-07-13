@@ -245,7 +245,7 @@ def create_agent_instance(agent_cls_or_func, agent_file: Path, **kwargs):
         try:
             from agentdk.utils.utils import get_llm
             kwargs['llm'] = get_llm()
-            logger.debug("Using default LLM for agent")
+            logger.info(f"Using default LLM for agent")
         except Exception as e:
             logger.warning(f"No LLM available: {e}")
             logger.warning("Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable")
@@ -724,7 +724,9 @@ Examples:
             asyncio.run(run_agent_interactive(agent, resume=args.resume))
             
         except Exception as e:
+            import traceback
             logger.error(f"Failed to run agent: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             sys.exit(1)
     
     elif args.command == "sessions":
