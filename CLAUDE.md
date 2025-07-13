@@ -7,11 +7,11 @@ This file provides guidance to Claude Code when working with the AgentDK reposit
 Claude automatically loads relevant context from `.claude/` directory based on task type:
 
 ### Context Triggers
-- **Agent Development** → `context`
+- **Overall Architecture of the project** → `context/ARCHITECTURE.md` 
 - **Coding Rules**
     - **Exception Handling** → `rules/exception_handling.md`
     - **Testing** → `rules/testing_requirements.md`
-- **Multi-step Tasks** → `rules/todo_management.md`
+    - **Multi-step Tasks** → `rules/todo_management.md`
 - **Architecture Questions** → `context`
 - **Code Reviews** → `.claude/commands/code_review.md` (comprehensive workflow with GitHub integration)
 - **GitHub Issues** → `.claude/commands/solve_github_issue.md`
@@ -146,7 +146,6 @@ NEVER commit unless explicitly requested. When committing:
 - Include performance improvements
 - Add co-authorship attribution
 
-*Detailed workflows in `.claude/commands/code_review.md` (comprehensive GitHub-integrated workflow), patterns in `.claude/patterns/`, architecture in `.claude/contexts/agentdk_architecture.md`*
 
 ## Important Notes
 - **Jupyter Compatibility**: Framework includes nest_asyncio for IPython
