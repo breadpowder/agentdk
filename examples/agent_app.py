@@ -25,17 +25,16 @@ except ImportError:
 from subagent.eda_agent import create_eda_agent
 from subagent.research_agent import create_research_agent
 from agentdk.core.logging_config import ensure_nest_asyncio
-from agentdk.agent.base_app import BaseMemoryApp
+from agentdk.agent.base_app import RootAgent, create_memory_session
 from agentdk.agent.app_utils import create_supervisor_workflow
 
 # Ensure async compatibility for IPython/Jupyter
 ensure_nest_asyncio()
 
-class App(BaseMemoryApp):
-    """Enhanced App with memory integration.
+class App(RootAgent):
+    """Clean application with dependency injection architecture.
     
-    Provides conversation continuity, user preference support,
-    and memory investigation tooling.
+    Combines application logic + agent interface with proper separation of concerns.
     """
 
     def __init__(
@@ -46,35 +45,43 @@ class App(BaseMemoryApp):
         memory_config: Optional[Dict[str, Any]] = None,
         resume_session: Optional[bool] = None
     ):
-        """Initialize Agent with optional memory integration.
+        """Initialize App with dependency injection and multiple inheritance.
         
         Args:
             llm: Language model instance
             memory: Whether to enable memory system
             user_id: User identifier for scoped memory
             memory_config: Optional memory configuration
-            resume_session: Whether to resume from previous session (None = no session management)
+            resume_session: Whether to resume from previous session
         """
-        # Store LLM for workflow creation
+        # Create memory session via factory (dependency injection)
+        memory_session = create_memory_session(
+            name="supervisor_app",
+            user_id=user_id,
+            enable_memory=memory,
+            memory_config=memory_config
+        )
+        
+        # Initialize with dependency injection (multiple inheritance)
+        super().__init__(
+            memory_session=memory_session,
+            name="supervisor_app",
+            resume_session=resume_session
+        )
+        
         self.llm = llm
-        
-        # Initialize with base class (which handles memory and workflow creation)
-        super().__init__(memory=memory, user_id=user_id, memory_config=memory_config, resume_session=resume_session)
-        
-        # Create workflow using LLM
-        self.app = self.create_workflow(llm)
+        self.workflow = self.create_workflow(llm)
     
 
-    def create_workflow(self, model: Any) -> Any:
-        """Create a supervisor workflow with research and EDA agents.
+    def create_workflow(self, llm: Any) -> Any:
+        """Implement workflow creation.
         
         Args:
-            model: Language model instance
+            llm: Language model instance
             
         Returns:
             LangGraph workflow with supervisor pattern
         """
-
         def web_search(query: str) -> str:
             """Search the web for information."""
             return (
@@ -86,36 +93,48 @@ class App(BaseMemoryApp):
                 "5. **Google (Alphabet)**: 181,269 employees."
             )
         
-        # Create EDA agent with MCP integration using builder pattern
+        # Create subagents with dependency injection
         eda_agent = create_eda_agent(
-            llm=model,
+            llm=llm,
             mcp_config_path="subagent/mcp_config.json",
-            name="eda_agent"
+            memory_session=None,  # App handles memory, subagents don't need it
+            enable_memory = False
         )
-        
-        # Create research agent with web search tool using builder pattern
         research_agent = create_research_agent(
-            llm=model,
+            llm=llm,
             tools=[web_search],
-            name="research_expert"
+            memory_session=None,
+            enable_memory= False
         )
         
-        # Enhanced supervisor prompt with memory awareness
         supervisor_prompt = self._create_supervisor_prompt()
-        
-        # Create supervisor workflow using common utility
-        return create_supervisor_workflow(
-            [research_agent, eda_agent],
-            model,
-            supervisor_prompt
-        )
+        return create_supervisor_workflow([research_agent, eda_agent], llm, supervisor_prompt)
+    
+    def clean_app(self) -> None:
+        """Cleanup application resources."""
+        # Cleanup workflow and resources
+        if hasattr(self, 'workflow'):
+            # Add any specific cleanup logic here
+            pass
+    
+    def _process_query(self, user_prompt: str, enhanced_input: Dict) -> str:
+        """Process using workflow."""
+        messages = self._create_workflow_messages(user_prompt, enhanced_input)
+        result = self.workflow.invoke({"messages": messages})
+        return self._extract_response(result)
+    
+    def _create_workflow_messages(self, user_prompt: str, enhanced_input: Dict) -> list:
+        """Create workflow messages from query and enhanced input."""
+        from agentdk.agent.app_utils import create_workflow_messages
+        return create_workflow_messages(user_prompt, enhanced_input)
+    
+    def _extract_response(self, result: Any) -> str:
+        """Extract response from workflow result."""
+        from agentdk.agent.app_utils import extract_response
+        return extract_response(result)
     
     def _create_supervisor_prompt(self) -> str:
-        """Create supervisor prompt with memory awareness.
-        
-        Returns:
-            Enhanced supervisor prompt
-        """
+        """Create supervisor prompt with memory awareness."""
         base_prompt = """You are a team supervisor managing a research expert and an EDA agent.
         
         CRITICAL ROUTING RULES:
@@ -144,7 +163,7 @@ class App(BaseMemoryApp):
         
         When in doubt about data-related questions, ALWAYS choose eda_agent."""
         
-        # Add memory awareness
+        # Add memory awareness if available
         return self.get_memory_aware_prompt(base_prompt)
     
     def _get_default_prompt(self) -> str:

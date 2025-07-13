@@ -738,6 +738,10 @@ try:
             # Resolve MCP config path
             resolved_path = self._resolve_mcp_config_path(mcp_config_path)
             
+            # Provide default prompt if none specified
+            if prompt is None:
+                prompt = "You are a helpful AI assistant with MCP tools for enhanced capabilities."
+            
             # Initialize with dependency injection
             super().__init__(
                 llm=llm,
@@ -799,6 +803,10 @@ try:
                 prompt: Optional system prompt
                 **kwargs: Additional configuration parameters
             """
+            # Provide default prompt if none specified
+            if prompt is None:
+                prompt = "You are a helpful AI assistant."
+            
             # Initialize without MCP configuration
             super().__init__(
                 llm=llm,

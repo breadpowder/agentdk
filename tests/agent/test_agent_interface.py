@@ -21,14 +21,20 @@ class ConcreteAgentInterface(AgentInterface):
 class ConcreteSubAgent(SubAgent):
     """Concrete implementation of SubAgent for testing."""
     
-    def __init__(self, llm=None, **kwargs):
+    def __init__(self, llm=None, prompt=None, **kwargs):
         """Initialize test agent with mock LLM if not provided."""
         if llm is None:
             llm = Mock()
-        super().__init__(llm=llm, **kwargs)
+        if prompt is None:
+            prompt = self._get_default_prompt()
+        super().__init__(llm=llm, prompt=prompt, **kwargs)
     
     def _get_default_prompt(self) -> str:
         return "You are a test agent."
+    
+    def _execute_with_llm(self, user_prompt: str, enhanced_input: Dict) -> str:
+        """Implementation of abstract _execute_with_llm method."""
+        return f"Test response to: {user_prompt}"
     
     async def _create_langgraph_agent(self) -> None:
         """Create a mock LangGraph agent."""
@@ -234,8 +240,11 @@ class TestSubAgent:
         
         # Verify the prompt was parsed and memory context included
         call_args = agent.agent.ainvoke.call_args[0][0]
-        assert "test question" in call_args["messages"][0]
-        assert "previous conversation" in call_args["messages"][0]
+        messages = call_args["messages"]
+        # messages[0] = system prompt, messages[1] = memory context, messages[2] = user query
+        assert len(messages) >= 3
+        assert "test question" in messages[2].content  # Human message with actual query
+        assert "previous conversation" in messages[1].content  # System message with memory context
 
     @pytest.mark.asyncio
     async def test_query_async_initialization_error_propagation(self, mock_llm):

@@ -15,7 +15,7 @@ from ..agent.agent_interface import AgentInterface
 from ..core.logging_config import get_logger
 
 
-class MemoryAwareAgent(AgentInterface):
+class MemoryAwareSession(ABC):
     """Abstract base class for agents with memory integration.
     
     Provides conversation continuity, user preference support,
@@ -28,8 +28,6 @@ class MemoryAwareAgent(AgentInterface):
 
     def __init__(
         self, 
-        llm: Optional[Any] = None,
-        config: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
         prompt: Optional[str] = None,
         enable_memory: bool = True,
@@ -58,11 +56,8 @@ class MemoryAwareAgent(AgentInterface):
         if memory is not None:
             enable_memory = memory
         
-        # Store agent configuration
-        self.llm = llm
-        self.config = config or {}
+
         self.name = name or self.__class__.__name__.lower().replace("agent", "")
-        self.prompt = prompt
         self.enable_memory = enable_memory
         self.user_id = user_id
         self.resume_session = resume_session
@@ -372,58 +367,39 @@ USER PREFERENCE SUPPORT:
                 formatted_lines.append(f"  - {content}")
         
         return "\n".join(formatted_lines) if formatted_lines else "No relevant context available"
-    
-    def query(self, user_prompt: str, **kwargs) -> str:
-        """Process a user prompt and return a response.
-        
-        This method implements the AgentInterface query method by delegating
-        to the __call__ method, which handles memory integration.
-        
+
+
+
+    def parse_memory_context(self, user_prompt: str) -> tuple[str, str]:
+        """Parse memory context from formatted user prompt.
+
         Args:
-            user_prompt: The user's input prompt
-            **kwargs: Additional keyword arguments for the query
-            
-        Returns:
-            str: The agent's response
-        """
-        return self.__call__(user_prompt)
-    
-    def _get_default_prompt(self) -> str:
-        """Get the default system prompt for this agent type.
+            user_prompt: User prompt that may contain memory context
 
         Returns:
-            Default system prompt for the agent
+            Tuple of (actual_query, memory_context)
         """
-        if self.prompt:
-            return self.prompt
-        return "You are a helpful AI assistant."
-    
-    @abstractmethod
-    def __call__(self, query: str) -> str:
-        """Process a query and return a response.
-        
-        Concrete implementations should:
-        1. Call process_with_memory(query) to get enhanced input
-        2. Process the query with their specific logic
-        3. Call finalize_with_memory(query, response) to store interaction
-        4. Return the response
-        
-        Args:
-            query: User's input query
-            
-        Returns:
-            Agent's response
-        """
-        pass
-    
-    @abstractmethod
-    def create_workflow(self, *args, **kwargs) -> Any:
-        """Create the agent's workflow.
-        
-        Concrete implementations should create their specific workflow
-        and can use get_memory_aware_prompt() to enhance their prompts.
-        
-        Returns:
-            Agent's workflow object
-        """
-        pass 
+        # Check if the prompt contains memory context formatting
+        if "User query: " in user_prompt and "Memory context: " in user_prompt:
+            try:
+                # Split by the first occurrence of "Memory context:"
+                parts = user_prompt.split("Memory context: ", 1)
+                if len(parts) == 2:
+                    # Extract the user query from the first part
+                    first_part = parts[0].strip()
+                    if first_part.startswith("User query: "):
+                        actual_query = first_part.replace("User query: ", "").strip()
+                    else:
+                        actual_query = first_part.strip()
+
+                    # The memory context is everything after "Memory context: "
+                    memory_context = parts[1].strip()
+
+                    return actual_query, memory_context
+
+            except Exception as e:
+                self.logger.warning(f"Failed to parse memory context: {e}")
+                return user_prompt, ""
+
+        # No memory context found, return original prompt
+        return user_prompt, ""

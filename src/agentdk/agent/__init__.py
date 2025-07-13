@@ -1,23 +1,19 @@
 """Agent module for AgentDK.
 
-This module provides agent interfaces, session management, and application utilities.
+This module provides the clean AgentDK architecture with dependency injection.
 """
 
-from .agent_interface import AgentInterface, SubAgentWithMCP, SubAgentWithoutMCP, SubAgent
+from .agent_interface import AgentInterface, SubAgent, SubAgentWithMCP, SubAgentWithoutMCP, App, RootAgent, create_memory_session
+from .base_app import *  # Re-export clean architecture
 from .session_manager import SessionManager
-from .base_app import BaseMemoryApp, SupervisorApp
-from .root_agent import RootAgent, SupervisorAgent
-from .factory import create_agent
 
 __all__ = [
     "AgentInterface",
+    "SubAgent", 
     "SubAgentWithMCP",
-    "SubAgentWithoutMCP",
-    "SubAgent",
-    "SessionManager",
-    "BaseMemoryApp",
-    "SupervisorApp",
+    "SubAgentWithoutMCP", 
+    "App",
     "RootAgent",
-    "SupervisorAgent",
-    "create_agent",
+    "create_memory_session",
+    "SessionManager",
 ]

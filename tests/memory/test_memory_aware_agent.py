@@ -8,10 +8,10 @@ import pytest
 from typing import Any
 from unittest.mock import patch, MagicMock
 
-from agentdk.memory import MemoryAwareAgent
+from agentdk.memory import MemoryAwareSession
 
 
-class MockMemoryAgent(MemoryAwareAgent):
+class MockMemoryAgent(MemoryAwareSession):
     """Test implementation of MemoryAwareAgent for testing."""
     
     def __call__(self, query: str) -> str:

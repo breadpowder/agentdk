@@ -32,7 +32,7 @@ from .memory_tools import MemoryTools
 from .working_memory import WorkingMemory
 from .episodic_memory import EpisodicMemory
 from .factual_memory import FactualMemory
-from .memory_aware_agent import MemoryAwareAgent
+from .memory_aware_agent import MemoryAwareSession
 
 __version__ = "0.1.0"
 __all__ = [
@@ -41,5 +41,5 @@ __all__ = [
     'WorkingMemory',
     'EpisodicMemory',
     'FactualMemory',
-    'MemoryAwareAgent'
+    'MemoryAwareSession'
 ]

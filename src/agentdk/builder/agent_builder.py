@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, List, Union, Callable
 from pathlib import Path
 import inspect
 
-from ..agent.agent_interface import SubAgent
+from ..agent.agent_interface import SubAgent, SubAgentWithMCP, SubAgentWithoutMCP, create_memory_session
 from ..core.logging_config import get_logger
 
 
@@ -109,12 +109,12 @@ class AgentBuilder:
             Self for method chaining
         """
         self._config['enable_memory'] = enable
-        self._config['memory_user_id'] = user_id
+        self._config['user_id'] = user_id
         self._config['memory_config'] = config
         return self
 
     def build(self) -> SubAgent:
-        """Build the agent using generic implementation.
+        """Build the agent using concrete implementation.
         
         Returns:
             Configured agent that implements SubAgent with memory capabilities
@@ -126,29 +126,18 @@ class AgentBuilder:
         if 'llm' not in self._config or self._config['llm'] is None:
             raise ValueError("LLM is required. Use .with_llm(llm) to set it.")
 
-        # Validate that either tools or MCP config is provided for functional agent
-        has_tools = 'tools' in self._config and self._config['tools']
-        has_mcp = 'mcp_config_path' in self._config and self._config['mcp_config_path']
-        
-        if not has_tools and not has_mcp:
-            self._logger.warning(
-                "No tools or MCP configuration provided. Agent will have limited functionality."
-            )
-
         # Resolve the prompt
         resolved_prompt = self._resolve_prompt()
+        self._config['resolved_prompt'] = resolved_prompt
 
-        # Create and return generic agent
-        return self._create_generic_agent(resolved_prompt)
+        # Create and return concrete agent
+        return self._create_agent()
 
     def _resolve_prompt(self) -> str:
         """Resolve prompt from various input types.
         
         Returns:
             Resolved prompt string
-            
-        Raises:
-            ValueError: If prompt cannot be resolved
         """
         prompt_input = self._config.get('prompt')
         
@@ -157,166 +146,128 @@ class AgentBuilder:
 
         # Handle callable (function)
         if callable(prompt_input):
-            try:
-                return prompt_input()
-            except Exception as e:
-                raise ValueError(f"Failed to call prompt function: {e}")
+            return prompt_input()
 
-        # Handle string
-        if isinstance(prompt_input, str):
-            # Check if it's a file path
-            if prompt_input.endswith(('.txt', '.md')) and Path(prompt_input).exists():
-                try:
-                    return Path(prompt_input).read_text(encoding='utf-8')
-                except Exception as e:
-                    raise ValueError(f"Failed to read prompt file {prompt_input}: {e}")
+        # Handle string/Path
+        if isinstance(prompt_input, (str, Path)):
+            path_obj = Path(prompt_input)
+            # Check if it's a file path that exists
+            if path_obj.exists() and path_obj.is_file():
+                return path_obj.read_text(encoding='utf-8')
             else:
                 # Regular string literal
-                return prompt_input
-
-        # Handle Path object
-        if isinstance(prompt_input, Path):
-            try:
-                return prompt_input.read_text(encoding='utf-8')
-            except Exception as e:
-                raise ValueError(f"Failed to read prompt file {prompt_input}: {e}")
+                return str(prompt_input)
 
         # Fallback: convert to string
         return str(prompt_input)
 
-    def _create_generic_agent(self, resolved_prompt: str) -> SubAgent:
-        """Create a generic agent that implements all required abstract methods.
+    def _create_agent(self) -> SubAgent:
+        """Create concrete agent instance with dependency injection.
         
-        Args:
-            resolved_prompt: The resolved system prompt string
-            
         Returns:
-            Generic agent instance with memory capabilities
+            SubAgentWithMCP or SubAgentWithoutMCP instance
         """
-        config = self._config.copy()
-        config['resolved_prompt'] = resolved_prompt
-
-        class GenericAgent(SubAgent):
-            """Generic agent implementation that handles all boilerplate."""
-
-            def __init__(self, builder_config: Dict[str, Any]):
-                """Initialize generic agent with builder configuration."""
-                # Extract parameters for SubAgent (now memory-aware)
-                init_kwargs = {
-                    'llm': builder_config.get('llm'),
-                    'prompt': builder_config.get('resolved_prompt'),
-                    'name': builder_config.get('name', 'generic_agent'),
-                    'tools': builder_config.get('tools', []),
-                    'enable_memory': builder_config.get('enable_memory', True),
-                    'resume_session': builder_config.get('resume_session'),
-                    'user_id': builder_config.get('memory_user_id', 'default'),
-                    'memory_config': builder_config.get('memory_config')
-                }
-                
-                # Add MCP config if provided
-                if 'mcp_config_path' in builder_config:
-                    init_kwargs['mcp_config_path'] = builder_config['mcp_config_path']
-                
-                super().__init__(**init_kwargs)
-                self._builder_config = builder_config
-
-            def _get_default_prompt(self) -> str:
-                """Return the resolved prompt from builder."""
-                return self._builder_config['resolved_prompt']
-
-            def __call__(self, query: str) -> str:
-                """Process a query and return a response."""
-                # Use memory-aware processing from parent class
-                enhanced_input = self.process_with_memory(query)
-                
-                # Simple processing - just return a basic response
-                # In a real implementation, this would use the LangGraph agent
-                agent_name = self._builder_config.get('name', 'agent')
-                
-                # Basic response with memory context if available
-                memory_context = enhanced_input.get('memory_context')
-                if memory_context:
-                    result = f"Hello! I'm {agent_name}. I have access to our conversation history and will use it to provide better responses. You asked: {query}"
-                else:
-                    result = f"Hello! I'm {agent_name}. You asked: {query}"
-                
-                # Finalize with memory
-                return self.finalize_with_memory(query, result)
-
-            def create_workflow(self):
-                """Create simple workflow for generic agent."""
-                # Return None for simple agents, workflow creation happens in _create_langgraph_agent
-                return None
-
-            async def _create_langgraph_agent(self) -> None:
-                """Create LangGraph reactive agent with available tools."""
-                try:
-                    from langgraph.prebuilt import create_react_agent
-                    
-                    # Create react agent with LLM and tools
-                    self.agent = create_react_agent(self.llm, self._tools)
-                    
-                    self.logger.debug(f"Created LangGraph agent with {len(self._tools)} tools")
-                    
-                except ImportError as e:
-                    self.logger.error(f"Failed to import LangGraph: {e}")
-                    raise
-                except Exception as e:
-                    self.logger.error(f"Failed to create LangGraph agent: {e}")
-                    raise
-
-            def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
-                """Generic state processing for LangGraph workflows."""
-                try:
-                    # Extract user input from state
-                    user_input = state.get('user_input', state.get('query', ''))
-                    
-                    if not user_input:
-                        self.logger.warning("No user input found in state")
-                        state['agent_output'] = "No user input provided"
-                        return state
-
-                    # Process the query using inherited method
-                    result = self.query(user_input)
-                    
-                    # Update state with results
-                    state['agent_output'] = result
-                    state['agent_type'] = self._builder_config.get('name', 'generic')
-                    
-                    self.logger.info("Agent processing completed successfully")
-                    return state
-
-                except Exception as e:
-                    error_msg = f"Agent processing error: {e}"
-                    self.logger.error(error_msg)
-                    
-                    state['agent_output'] = error_msg
-                    state['error'] = str(e)
-                    
-                    return state
-
-        return GenericAgent(config)
+        has_mcp = 'mcp_config_path' in self._config and self._config['mcp_config_path']
+        
+        # Create memory session using factory (dependency injection)
+        memory_session = create_memory_session(
+            name=self._config.get('name'),
+            user_id=self._config.get('user_id', 'default'),
+            enable_memory=self._config.get('enable_memory', True),
+            memory_config=self._config.get('memory_config'),
+            require_memory=self._config.get('require_memory', False)
+        )
+        
+        # Common parameters for both agent types (clean architecture)
+        common_params = {
+            'llm': self._config['llm'],
+            'memory_session': memory_session,  # Dependency injection
+            'name': self._config.get('name'),
+            'prompt': self._config.get('resolved_prompt')
+        }
+        
+        if has_mcp:
+            # Create SubAgentWithMCP
+            return SubAgentWithMCP(
+                mcp_config_path=self._config['mcp_config_path'],
+                **common_params
+            )
+        else:
+            # Create SubAgentWithoutMCP
+            return SubAgentWithoutMCP(
+                tools=self._config.get('tools', []),
+                **common_params
+            )
 
 
-def Agent() -> AgentBuilder:
-    """Factory function to create a new AgentBuilder.
+def buildAgent(
+    agent_class: Optional[str] = None,
+    llm: Optional[Any] = None,
+    memory_session: Optional[Any] = None,
+    mcp_config_path: Optional[Union[str, Path]] = None,
+    tools: Optional[List[Any]] = None,
+    name: Optional[str] = None,
+    prompt: Optional[str] = None,
+    **kwargs: Any
+) -> Union[AgentBuilder, SubAgent]:
+    """Create agent using direct function call or fluent API.
     
+    This function supports two usage patterns:
+    1. Direct creation: buildAgent(agent_class="SubAgentWithMCP", llm=llm, ...)
+    2. Fluent API: buildAgent().with_llm(llm).with_prompt(...).build()
+    
+    Args:
+        agent_class: Agent class to create ("SubAgentWithMCP" or "SubAgentWithoutMCP")
+        llm: Language model instance
+        memory_session: Injected memory session (dependency injection)
+        mcp_config_path: Path to MCP configuration
+        tools: List of tools for non-MCP agents
+        name: Agent name
+        prompt: System prompt
+        **kwargs: Additional configuration
+        
     Returns:
-        New AgentBuilder instance for fluent API usage
+        Agent instance if direct creation, AgentBuilder if fluent API
         
     Examples:
-        # Basic agent
-        agent = (Agent()
+        # Direct creation (new clean way)
+        agent = buildAgent(
+            agent_class="SubAgentWithMCP",
+            llm=llm,
+            mcp_config_path="config.json",
+            memory_session=memory_session
+        )
+        
+        # Fluent API (backward compatible)
+        agent = (buildAgent()
             .with_llm(llm)
             .with_prompt("You are helpful")
             .build())
-        
-        # EDA agent with MCP
-        eda_agent = (Agent()
-            .with_llm(llm) 
-            .with_prompt(get_eda_agent_prompt)
-            .with_mcp_config("config.json")
-            .with_name("eda_agent")
-            .build())
     """
+    # Direct creation pattern (clean new architecture)
+    if agent_class is not None:
+        if agent_class == "SubAgentWithMCP":
+            if not mcp_config_path:
+                raise ValueError("mcp_config_path is required for SubAgentWithMCP")
+            return SubAgentWithMCP(
+                llm=llm,
+                mcp_config_path=mcp_config_path,
+                memory_session=memory_session,
+                name=name,
+                prompt=prompt,
+                **kwargs
+            )
+        elif agent_class == "SubAgentWithoutMCP":
+            return SubAgentWithoutMCP(
+                llm=llm,
+                tools=tools or [],
+                memory_session=memory_session,
+                name=name,
+                prompt=prompt,
+                **kwargs
+            )
+        else:
+            raise ValueError(f"Unknown agent_class: {agent_class}. Use 'SubAgentWithMCP' or 'SubAgentWithoutMCP'")
+    
+    # Fluent API pattern (backward compatible)
     return AgentBuilder()

@@ -6,12 +6,12 @@ builder pattern, eliminating the need for class definitions and boilerplate code
 
 import sys
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Dict
 
 # Add src to path for agentdk imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
 
-from agentdk import Agent
+from agentdk.builder.agent_builder import buildAgent
 
 # Handle imports for both CLI and direct usage
 try:
@@ -27,20 +27,28 @@ except ImportError:
 
 
 def create_eda_agent(
-    llm: Optional[Any] = None,
+    llm: Any,
     mcp_config_path: Optional[Union[str, Path]] = None,
+    memory_session: Optional[Any] = None,
     name: str = "eda_agent",
-    resume_session: Optional[bool] = None,
+    enable_memory: bool = True,
+    user_id: str = "default",
+    memory_config: Optional[Dict[str, Any]] = None,
+    require_memory: bool = False,
     **kwargs: Any
 ) -> Any:
-    """Create an EDA (Exploratory Data Analysis) agent using builder pattern.
+    """Create an EDA (Exploratory Data Analysis) agent using dependency injection.
     
     Args:
-        llm: Language model instance
+        llm: Language model instance (required)
         mcp_config_path: Path to MCP configuration file. If not provided,
                         uses default 'mcp_config.json' in same directory
+        memory_session: Injected memory session (dependency injection)
         name: Agent name for identification
-        resume_session: Whether to resume from previous session (None = no session management)
+        enable_memory: Whether to enable memory (used if memory_session is None)
+        user_id: User identifier for scoped memory
+        memory_config: Optional memory configuration dictionary
+        require_memory: If True, fails fast when memory unavailable
         **kwargs: Additional configuration passed to builder
         
     Returns:
@@ -63,19 +71,24 @@ def create_eda_agent(
     if mcp_config_path is None:
         mcp_config_path = str(Path(__file__).parent / 'mcp_config.json')
     
-    # Create agent using builder pattern
-    builder = (Agent()
-        .with_llm(llm)
-        .with_prompt(get_eda_agent_prompt)  # Function from prompts.py
-        .with_mcp_config(mcp_config_path)
-        .with_name(name))
+    # Create memory session if needed (dependency injection)
+    if memory_session is None and enable_memory:
+        from agentdk.agent.agent_interface import create_memory_session
+        memory_session = create_memory_session(
+            name=name,
+            user_id=user_id,
+            enable_memory=enable_memory,
+            memory_config=memory_config,
+            require_memory=require_memory
+        )
     
-    # Only add session management if explicitly requested
-    if resume_session is not None:
-        builder = builder.with_session(resume_session=resume_session)
-    
-    return builder.build()
-
-
-# Backward compatibility alias - allows existing code to work
-EDAAgent = create_eda_agent
+    # Create agent using clean direct interface
+    return buildAgent(
+        agent_class="SubAgentWithMCP",
+        llm=llm,
+        mcp_config_path=mcp_config_path,
+        memory_session=memory_session,
+        name=name,
+        prompt=get_eda_agent_prompt(),
+        **kwargs
+    )

@@ -8,7 +8,7 @@ from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
 
 from agentdk.agent.session_manager import SessionManager
-from agentdk.memory.memory_aware_agent import MemoryAwareAgent
+from agentdk.memory.memory_aware_agent import MemoryAwareSession
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def session_manager(temp_session_dir):
 @pytest.fixture
 def mock_memory_aware_agent():
     """Create a mock MemoryAwareAgent for testing."""
-    class MockAgent(MemoryAwareAgent):
+    class MockAgent(MemoryAwareSession):
         def __init__(self):
             self.enable_memory = True
             self.memory = Mock()
@@ -37,6 +37,7 @@ def mock_memory_aware_agent():
                 {"content": "User: test query"},
                 {"content": "Assistant: test response"}
             ])
+            self.logger = Mock()  # Add logger mock
         
         def __call__(self, query: str) -> str:
             return f"Response to: {query}"
@@ -210,7 +211,7 @@ class TestMemoryAwareAgentSessionIntegration:
     
     def test_restore_from_session_no_memory(self):
         """Test restoring session when agent has no memory."""
-        class NoMemoryAgent(MemoryAwareAgent):
+        class NoMemoryAgent(MemoryAwareSession):
             def __init__(self):
                 self.enable_memory = False
                 self.memory = None
@@ -236,7 +237,7 @@ class TestMemoryAwareAgentSessionIntegration:
     
     def test_get_session_state_no_memory(self):
         """Test getting session state when agent has no memory."""
-        class NoMemoryAgent(MemoryAwareAgent):
+        class NoMemoryAgent(MemoryAwareSession):
             def __init__(self):
                 self.enable_memory = False
                 self.memory = None

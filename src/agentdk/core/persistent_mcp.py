@@ -308,11 +308,15 @@ class PersistentSessionManager:
                             text_parts.append(content.text)
                         else:
                             text_parts.append(str(content))
-
+                    text_to_return = ""
                     if len(text_parts) == 1:
-                        return text_parts[0]
+                        text_to_return = text_parts[0]
                     elif text_parts:
-                        return "\n".join(text_parts)
+                        text_to_return = "\n".join(text_parts)
+
+                    logger.debug(f"Tool calling result parsed:\n {text_to_return}")
+                    return text_to_return
+
 
                 return "Tool executed successfully"
 
