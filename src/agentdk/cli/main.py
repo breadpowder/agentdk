@@ -550,6 +550,14 @@ async def cleanup_and_exit(session_manager, history_manager: GlobalCLIHistory = 
         logger.error(f"Error during cleanup: {e}")
     
     logger.info("Shutdown complete")
+    
+    # WORKAROUND: Suppress GC error messages during process exit
+    import os
+    try:
+        os.close(2)  # Close stderr to suppress garbage collection errors
+    except OSError:
+        pass  # Stderr might already be closed
+    
     # Actually exit the process
     sys.exit(0)
 

@@ -145,10 +145,9 @@ class App(RootAgent):
         - Exploratory data analysis (EDA)
         - Financial data analysis
         
-        Use 'research_expert' for:
+        Use 'research_expert' for only user specify doing web search using the agent:
         - Current events, news, web search
-        - General information not in the database
-        - Company information not stored in database
+
         
         CRITICAL RESPONSE RULES:
         1. When an agent provides a response, ALWAYS return the COMPLETE response exactly as provided.
