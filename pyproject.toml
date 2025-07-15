@@ -71,6 +71,9 @@ all = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentdk"]
 
+[tool.hatch.build.targets.wheel.sources]
+"examples" = "agentdk/examples"
+
 [project.scripts]
 agentdk = "agentdk.cli.main:main"
 
@@ -81,6 +84,7 @@ path = "src/agentdk/__init__.py"
 include = [
     "/src",
     "/tests",
+    "/examples",
     "/README.md",
     "/LICENSE",
 ]

@@ -238,3 +238,6 @@ langchain-mcp-adapters/
 CLAUDE.local.md
 mysql_mcp_server/
 langchain_mcp_server/
+
+# SuperClaude framework files
+SuperClaude/
